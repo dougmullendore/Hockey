@@ -1,9 +1,10 @@
 {
  "as_of": "2026-10-06",
- "source": "published contract figures compiled by GOAT Hockey (790 of 802 confirmed on two cap-tracking sites)",
+ "source": "published contract figures compiled by GOAT Hockey (792 of 806 confirmed on two cap-tracking sites)",
  "checked": {
-  "two sources": 790,
-  "one source": 11,
+  "two sources": 792,
+  "one source": 12,
+  "sources differ by $9K": 1,
   "sources differ by $21K": 1
  }
 }
