@@ -121,8 +121,11 @@ def _percentiles(blended: dict, metrics: list, single: bool) -> dict:
     return out
 
 
-def build(final: dict, out: Path) -> dict:
-    """Write cards.json and return a small summary."""
+def build(final: dict, out: Path, bio: dict | None = None) -> dict:
+    """Write cards.json and return a small summary.
+
+    `bio` maps a player id to his birth date and handedness, when known."""
+    bio = bio or {}
     seasons = _season_records(final, out)
     order = sorted(seasons)
     players = {}
@@ -139,6 +142,11 @@ def build(final: dict, out: Path) -> dict:
                 r = seasons[season][p]
                 card = players.setdefault(str(p), {"n": r["name"], "p": group, "y": {}})
                 card["n"], card["t"] = r["name"], (r["team"] or "").split("/")[0]
+                who = bio.get(str(p)) or {}
+                if who.get("born"):
+                    card["b"] = who["born"]
+                if who.get("shoots"):
+                    card["sh"] = who["shoots"]
                 row = {"t": r["team"], "gp": r["gp"], "war": r["war"],
                        "p1": pct1[p][0], "v1": pct1[p][1], "p3": pct3[p][0], "v3": pct3[p][1],
                        "n3": sum(1 for w in window if p in w)}
@@ -150,6 +158,10 @@ def build(final: dict, out: Path) -> dict:
                 card["y"][str(season)] = row
     doc = {"seasons": order, "weights": [round(w, 2) for w in WEIGHTS],
            "skater_metrics": [m[0] for m in SKATER_METRICS],
-           "goalie_metrics": [m[0] for m in GOALIE_METRICS], "players": players}
+           "goalie_metrics": [m[0] for m in GOALIE_METRICS],
+           # per season: [millions of dollars per win, league-minimum salary]
+           "money": {str(s): [final[s]["notes"].get("dollars_per_war"), final[s]["notes"].get("min_salary")]
+                     for s in order},
+           "players": players}
     store.write_json(out / "cards.json", doc, compact=True)
     return {"players": len(players), "seasons": len(order)}

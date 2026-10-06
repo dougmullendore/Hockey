@@ -273,6 +273,18 @@ def skaters(stints: pd.DataFrame, players: pd.DataFrame, shots: pd.DataFrame,
     }
 
 
+def dollars_per_war(season: int, league_war: float) -> tuple[float, float]:
+    """(millions of dollars one win costs, league-minimum salary) for a season.
+
+    Every team has to fill a roster at the minimum anyway. What is left of
+    league payroll buys all the wins above replacement, so dividing one by
+    the other gives the going rate for a win."""
+    cap, minimum = config.SALARY_CAP.get(season) or config.SALARY_CAP[max(config.SALARY_CAP)]
+    payroll = 32 * cap * config.CAP_SPEND_SHARE
+    floor = 32 * config.ROSTER_SPOTS * minimum
+    return ((payroll - floor) / league_war if league_war > 0 else 0.0), minimum
+
+
 RAPM_PARTS = ["ev_off", "ev_def", "pp", "pk"]
 POOL_OF = {"ev_off": ("pool5", "toi5"), "ev_def": ("pool5", "toi5"), "pp": ("pool_pp", "toi_pp"),
            "pk": ("pool_sh", "toi_sh"), "fin": ("pool5", "toi5"), "pen": ("pool5", "toi5")}
@@ -351,6 +363,7 @@ def finalize(seasons: dict, goalie_rows: dict, gpw: float, complete: set) -> dic
                          "war": round(gar / gpw, 2), "war82": None, "_main": first, "_shares": {first: 1.0}})
         rows.sort(key=lambda r: -r["war"])
         out[s] = {"rows": rows, "notes": {
+            "league_war": round(sum(r["war"] for r in rows), 1),
             "goals_per_win": gpw, "scale": scale,
             "penalty_value": seasons[s]["notes"].get("penalty_value"),
             "replacement_per60": {c: {g: round(v * 3600.0, 3) for g, v in repl[c].items()} for c in COMPONENTS},
@@ -360,6 +373,17 @@ def finalize(seasons: dict, goalie_rows: dict, gpw: float, complete: set) -> dic
             "goalie_war": round(sum(r["war"] for r in rows if r["pos"] == "G"), 1),
             "finished": s in complete,
         }}
+    # Dollar values: a full season's league WAR sets the price of a win.
+    full = [out[s]["notes"]["league_war"] for s in out if s in complete]
+    typical = float(np.mean(full)) if full else 620.0
+    for s, res in out.items():
+        league = res["notes"]["league_war"] if s in complete else typical
+        rate, minimum = dollars_per_war(s, league)
+        res["notes"]["dollars_per_war"], res["notes"]["min_salary"] = round(rate, 3), minimum
+        for r in res["rows"]:
+            # the minimum salary is earned by the game, so a call-up is not credited a full one
+            base = minimum * min(1.0, (r["gp"] or 0) / 82.0)
+            r["value"] = round(max(base, base + r["war"] * rate), 2)
     return out
 
 

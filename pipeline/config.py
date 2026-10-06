@@ -56,6 +56,17 @@ PRED_SUMMER_REGRESS = 0.8
 PRED_STRENGTH_DOUBT = 0.25
 PRED_SIMULATIONS = 10000
 
+# --- Money ------------------------------------------------------------------
+# Salary cap ceiling and league-minimum salary by season, in millions of US
+# dollars. Add a line when the league announces a new season's numbers; until
+# then the newest line is reused.
+SALARY_CAP = {
+    20212022: (81.5, 0.75), 20222023: (82.5, 0.75), 20232024: (83.5, 0.775),
+    20242025: (88.0, 0.775), 20252026: (95.5, 0.775), 20262027: (104.0, 0.85),
+}
+CAP_SPEND_SHARE = 0.95      # teams spend about this much of the ceiling on average
+ROSTER_SPOTS = 23
+
 # Game types: 2 = regular season, 3 = playoffs.
 GAME_TYPES = {2: "regular", 3: "playoffs"}
 

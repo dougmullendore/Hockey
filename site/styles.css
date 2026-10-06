@@ -200,6 +200,7 @@ table.stats { border-collapse: separate; border-spacing: 0; width: 100%; font-si
 .pcard-head { background: var(--ink); color: var(--ice); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px 32px; padding: 20px 24px 18px; border-bottom: 4px solid var(--red); }
 .pcard-head h2 { font-size: clamp(2rem, 6vw, 3.5rem); font-stretch: 64%; font-weight: 800; line-height: .95; margin: 0 0 8px; text-wrap: balance; }
 .pcard-head p { margin: 0; font-size: .9375rem; opacity: .8; max-width: 52ch; }
+.pcard-head p.pcard-bio { margin-top: 6px; opacity: 1; font-weight: 600; }
 .pcard-war { text-align: right; display: grid; justify-items: end; }
 .pcard-war b { font-size: clamp(3rem, 9vw, 5rem); font-stretch: 64%; font-weight: 800; line-height: .85; }
 .pcard-war span { font-size: .8125rem; opacity: .8; max-width: 16ch; }

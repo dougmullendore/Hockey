@@ -506,7 +506,7 @@ def _finish_war(data: Path, out: Path, all_games: dict, manifest: dict, log) -> 
                     check.append((w, pts[team]))
         rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in res["rows"]]
         store.write_json(out / f"war_{season}_regular.json", rows, compact=True)
-    card_info = cards.build(final, out)
+    card_info = cards.build(final, out, store.read_json(data / "official" / "players.json", {}) or {})
     log(f"cards: {card_info}")
     notes = final[max(final)]["notes"]
     meta = {"goals_per_win": gpw, "scale": notes["scale"],
@@ -516,6 +516,7 @@ def _finish_war(data: Path, out: Path, all_games: dict, manifest: dict, log) -> 
                                                   for s in (complete or final)])), 3),
             "seasons": {str(s): {"total": r["notes"]["total_war"], "skaters": r["notes"]["skater_war"],
                                  "goalies": r["notes"]["goalie_war"]} for s, r in final.items()},
+            "dollars_per_war": {str(s): r["notes"].get("dollars_per_war") for s, r in final.items()},
             "settings": {"lambda_ev": config.WAR_LAMBDA_EV, "lambda_pp": config.WAR_LAMBDA_PP,
                          "fade": config.WAR_PRIOR_FADE, "finishing_k": config.WAR_FINISHING_K}}
     if len(check) >= 20:

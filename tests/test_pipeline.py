@@ -255,3 +255,13 @@ def test_season_simulation_adds_up():
     assert sim["COL"]["playoffs"] > 95 and sim["CHI"]["playoffs"] < 5
     assert sim["COL"]["cup"] == max(v["cup"] for v in sim.values())
     assert all(v["pts_lo"] <= v["proj_pts"] <= v["pts_hi"] for v in sim.values())
+
+
+def test_dollar_value_of_a_win():
+    rate, minimum = war.dollars_per_war(20252026, 620.0)
+    assert minimum == 0.775
+    # payroll left after 23 minimum salaries per team, spread over the league's wins
+    assert abs(rate - (32 * 95.5 * 0.95 - 32 * 23 * 0.775) / 620.0) < 1e-9
+    assert 3.0 < rate < 4.5
+    far_future, _ = war.dollars_per_war(20402041, 620.0)       # unknown season reuses the newest cap
+    assert far_future == war.dollars_per_war(max(config.SALARY_CAP), 620.0)[0]

@@ -81,6 +81,10 @@ A minute later the site is live at
 
 To rename the site, change `SITE_NAME` in `pipeline/config.py`.
 
+**Once a year:** when the league announces the next season's salary cap, add
+that season's cap and minimum salary to `SALARY_CAP` in `pipeline/config.py`.
+Dollar values use the newest line until then.
+
 ## Not affiliated with the NHL
 
 Data comes from the NHL's public game feeds. This project is not affiliated

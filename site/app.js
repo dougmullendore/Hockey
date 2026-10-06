@@ -44,6 +44,7 @@
     sv: function (v) { return v == null ? "" : v.toFixed(3).replace(/^0/, ""); },
     s1: function (v) { return v == null ? "" : (v > 0 ? "+" : "") + v.toFixed(1).replace("-", MINUS); },
     s2: function (v) { return v == null ? "" : (v > 0 ? "+" : "") + v.toFixed(2).replace("-", MINUS); },
+    usd: function (v) { return v == null ? "" : "$" + v.toFixed(1) + "M"; },
     txt: function (v) { return v == null ? "" : String(v); }
   };
   function niceDate(iso, withYear) {
@@ -131,6 +132,7 @@
       ["toi", "TOI", "Minutes played, all situations", F.int],
       ["war", "WAR", "Wins above replacement: the extra wins he gave his team compared with a fill-in player in the same ice time", F.d2, { grp: 1, bar: 1 }],
       ["war82", "WAR/82", "WAR at this pace over an 82-game season (skaters only)", F.d2, { sign: 1 }],
+      ["value", "Value", "What this season's WAR would cost at the going rate for a win, in millions of dollars. Nobody is valued below the league-minimum salary for the games he played", F.usd],
       ["ev_off", "EV Off", "Wins from his effect on his team's chances at five-on-five, with linemates, opponents, score and shift starts accounted for", F.d2, { grp: 1, sign: 1 }],
       ["ev_def", "EV Def", "Wins from his effect on the opponent's chances at five-on-five. Positive means he suppresses chances", F.d2, { sign: 1 }],
       ["pp", "PP", "Wins from his effect on his team's power-play chances", F.d2, { sign: 1 }],
@@ -577,10 +579,21 @@
       var card = el("article", { "class": "pcard" });
       var span = cs.single ? seasonLabel(cs.season) + " regular season"
         : (y.n3 > 1 ? "Regular seasons through " + seasonLabel(cs.season) + ", last " + y.n3 + " weighted toward the most recent" : seasonLabel(cs.season) + " regular season (his only one in this span)");
-      var warPct = pct[0];
+      var warPct = pct[0], bits = [];
+      if (pl.b) {
+        var endYear = +String(cs.season).slice(4), ref = new Date(Math.min(Date.now(), Date.UTC(endYear, 1, 1))), born = new Date(pl.b + "T00:00:00Z");
+        var age = ref.getUTCFullYear() - born.getUTCFullYear() - ((ref.getUTCMonth() < born.getUTCMonth() || (ref.getUTCMonth() === born.getUTCMonth() && ref.getUTCDate() < born.getUTCDate())) ? 1 : 0);
+        if (age > 15 && age < 60) bits.push("Age " + age);
+      }
+      if (pl.sh) bits.push((goalie ? "Catches " : "Shoots ") + (pl.sh === "L" ? "left" : "right"));
+      var money = (doc.money || {})[cs.season], worth = null;
+      var minPay = money ? money[1] * (cs.single ? Math.min(1, (y.gp || 0) / 82) : (goalie ? 50 / 82 : 1)) : 0;
+      if (money && money[0] && val[0] != null) worth = Math.max(minPay, minPay + val[0] * money[0]);
+      if (worth != null) bits.push(cs.single ? "Value delivered: $" + worth.toFixed(1) + "M" : "Worth about $" + worth.toFixed(1) + "M a season at this level");
       card.appendChild(el("header", { "class": "pcard-head" }, [
         el("div", {}, [el("h2", { text: pl.n }),
-          el("p", { text: (goalie ? "Goalie" : pl.p === "D" ? "Defenseman" : "Forward") + ", " + (y.t || pl.t || "") + ". " + span + "." })]),
+          el("p", { text: (goalie ? "Goalie" : pl.p === "D" ? "Defenseman" : "Forward") + ", " + (y.t || pl.t || "") + ". " + span + "." }),
+          bits.length ? el("p", { "class": "pcard-bio", text: bits.join(". ") + "." }) : null]),
         el("div", { "class": "pcard-war" }, [el("b", { text: warPct == null ? "\u2013" : String(warPct) }),
           el("span", { text: warPct == null ? "Not enough ice time to rank" : "WAR percentile among " + group })])
       ]));
@@ -807,6 +820,9 @@
       "<p>Each team carries a running strength rating built from two things: how well it out-chances opponents (expected goals), and how far its actual goals run ahead of or behind those chances. Recent games count more, and every team is pulled part of the way back to average over the summer. A game's win probability comes from the gap between the two ratings, home ice, and whether either team played the night before.</p>" +
       "<p id='ab-pred'></p>" +
       "<p>For the standings, the rest of the schedule is simulated thousands of times, followed by the playoff bracket. The model does not know about injuries, trades, or starting goalies, so it will be slow to react to a roster change.</p>" +
+      "<h2>Dollar values</h2>" +
+      "<p id='ab-money'>A player's value in dollars is his WAR times the going rate for a win, plus the league-minimum salary.</p>" +
+      "<p>It is a measure of what the performance was worth, not a prediction of the next contract, and it is not compared with actual salaries yet. WAR-based values run high for goalies, whose results swing more from year to year than teams are willing to pay for.</p>" +
       "<h2>Player cards</h2>" +
       "<p>A card ranks a player against others at his position, on rates rather than totals so missed games do not count against him. By default it blends three seasons, with the newest counting three times as much as the oldest, because one season is a small sample for most of these measures. Players without regular ice time of a given kind (the power play, say) are not ranked on it.</p>" +
       "<h2>On-ice numbers</h2>" +
@@ -834,6 +850,11 @@
         "% of the time. Always picking the home team wins " + (100 * m.home_win_rate).toFixed(1) + "%. On log loss, the usual score for probabilities (lower is better), it scored " + m.log_loss.toFixed(3) + " against " + m.baseline_log_loss.toFixed(3) + " for that baseline.";
     }).catch(function () {});
     var wm = meta.war || {};
+    if (wm.dollars_per_war) {
+      var ds = Object.keys(wm.dollars_per_war).sort(), lastS = ds[ds.length - 1];
+      document.getElementById("ab-money").textContent = "A player's value in dollars is his WAR times the going rate for a win, plus the league-minimum salary. The rate comes from league payroll: after every roster spot is paid the minimum, what teams have left to spend buys all the wins above replacement. For " +
+        lastS.slice(0, 4) + "-" + lastS.slice(6) + " that works out to about $" + wm.dollars_per_war[lastS].toFixed(1) + " million per win.";
+    }
     if (wm.goals_per_win) {
       var tc = wm.team_check, done = Object.keys(wm.seasons || {}).sort(), ref = wm.seasons[done[Math.max(0, done.length - 2)]] || {};
       document.getElementById("ab-war").textContent = "Goals become wins at " + wm.goals_per_win.toFixed(1) + " goals per win, measured from team results. A drawn penalty is worth about " + wm.penalty_value.toFixed(2) + " goals. " +
