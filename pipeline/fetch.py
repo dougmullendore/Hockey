@@ -178,6 +178,7 @@ def update_shifts(data: Path, season: int, manifest: dict, today: dt.date,
     have = set(shifts["game_id"].dropna().astype(int).unique())
     empty = set(info.get("shifts_empty", []))
     date_of = dict(zip(games["game_id"].astype(int), games["date"].astype(str)))
+    teams_of = {int(g.game_id): {int(g.home_id), int(g.away_id)} for g in games.itertuples(index=False)}
     recheck = (today - dt.timedelta(days=config.REFRESH_DAYS)).isoformat()
     retry = (today - dt.timedelta(days=14)).isoformat()
     tried = set(info.get("shifts_report_tried", []))
@@ -196,7 +197,8 @@ def update_shifts(data: Path, season: int, manifest: dict, today: dt.date,
             if err is not None:
                 log(f"  shifts {gid}: download failed: {err!r}")
                 continue
-            parsed = parse_shifts(raw, gid)
+            # the feed occasionally mixes in shifts from a different game
+            parsed = [r for r in parse_shifts(raw, gid) if r[1] in teams_of[gid]]
             if len(parsed) < MIN_SHIFTS:
                 blank.append(gid)
                 continue
