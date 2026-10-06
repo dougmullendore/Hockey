@@ -251,6 +251,56 @@ def update_official(data: Path, manifest: dict, log) -> None:
                     log(f"official {kind} totals {season}/{gt} unavailable: {e!r}")
 
 
+def update_players(data: Path, manifest: dict, log) -> None:
+    """Who is on each team, with birth dates and handedness.
+
+    Past seasons are fetched once; the current season is refreshed every
+    night so trades and call-ups show up."""
+    data = Path(data)
+    players = store.read_json(data / "official" / "players.json", {}) or {}
+    team_rosters = store.read_json(data / "official" / "team_rosters.json", {}) or {}
+    fetched = set(manifest.setdefault("_rosters_fetched", []))
+    urls = {}
+    for season in config.SEASONS:
+        games = store.read(data, "games", season)
+        teams = sorted(set(games["home_abbrev"].dropna()) | set(games["away_abbrev"].dropna()))
+        sched = store.read_json(data / "schedule" / f"{season}.json", []) or []
+        teams = sorted(set(teams) | {g["home"] for g in sched if g.get("home")})
+        current = season == config.SEASONS[-1]
+        for team in teams:
+            if current or f"{team}-{season}" not in fetched:
+                urls[(team, season)] = f"{config.API_WEB}/roster/{team}/{season}"
+    got = 0
+    for (team, season), raw, err in nhl_api.get_many(urls):
+        if err is not None:
+            if "404" not in repr(err):
+                log(f"roster {team} {season}: {err!r}")
+            continue
+        ids = []
+        for group in ("forwards", "defensemen", "goalies"):
+            for p in raw.get(group, []) or []:
+                pid = p.get("id")
+                if pid is None:
+                    continue
+                ids.append(int(pid))
+                players[str(pid)] = {
+                    "first": (p.get("firstName") or {}).get("default"),
+                    "last": (p.get("lastName") or {}).get("default"),
+                    "pos": p.get("positionCode"), "shoots": p.get("shootsCatches"),
+                    "born": p.get("birthDate"), "country": p.get("birthCountry"),
+                    "height_in": p.get("heightInInches"), "weight_lb": p.get("weightInPounds"),
+                }
+        if ids:
+            team_rosters.setdefault(str(season), {})[team] = sorted(ids)
+            fetched.add(f"{team}-{season}")
+            got += 1
+    manifest["_rosters_fetched"] = sorted(fetched)
+    if got:
+        store.write_json(data / "official" / "players.json", players, compact=True)
+        store.write_json(data / "official" / "team_rosters.json", team_rosters, compact=True)
+    log(f"rosters: {got} team lists fetched, {len(players)} players known")
+
+
 def update_standings(data: Path, log) -> None:
     """Which division and conference each team is in, with the official record."""
     try:
@@ -291,4 +341,9 @@ def update_all(data: Path, log, max_minutes: float = 150) -> list[dict]:
         store.write_json(data / "manifest.json", manifest)
     update_official(data, manifest, log)
     update_standings(data, log)
+    try:
+        update_players(data, manifest, log)
+    except Exception as e:
+        log(f"roster update failed: {e!r}")
+    store.write_json(data / "manifest.json", manifest)
     return results
