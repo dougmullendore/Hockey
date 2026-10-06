@@ -4,5 +4,7 @@ __pycache__/
 /data/
 .venv/
 
-# contract snapshot: not for the public repository (see contract-value-plan)
-/contracts/
+# contract look-up working files (only cap_hits.csv and info.json are published)
+/contracts/*
+!/contracts/cap_hits.csv
+!/contracts/info.json

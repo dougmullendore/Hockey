@@ -15,7 +15,7 @@ You do not need to run anything. GitHub does it all on a schedule.
 | Standings | Projected points, playoff odds and Stanley Cup odds from simulating the rest of the season |
 | WAR | Wins above replacement for every skater and goalie, split into its parts |
 | Cards | One card per player: where he ranks at his position in each part of his game |
-| Contracts | Cap hit next to what each player's play is worth. Only appears when contract figures are supplied (see below) |
+| Contracts | Cap hit next to what each player's play is worth: who is a bargain and who is not |
 | Goalies | Goals saved above expected, overall and on high-danger shots |
 | Skaters | Goals, assists, individual expected goals, finishing; plus on-ice results at five-on-five |
 | Lines | Forward lines, defense pairs, and how any two teammates do with and without each other |
@@ -89,15 +89,17 @@ Dollar values use the newest line until then.
 
 ## Contract figures
 
-The NHL's feeds do not include salaries, so the Contracts page needs a file
-of cap hits: `contracts/cap_hits.csv`, one line per contract, with the
-columns `team,last,first,pos,cap_hit,expiry_status,section`, plus
-`contracts/info.json` saying where the numbers came from and the date. If the
-file is not there, the page and its menu link are simply left out.
+The NHL's feeds do not include salaries, so the Contracts page reads cap hits
+from `contracts/cap_hits.csv`: one line per contract, with the columns
+`team,last,first,pos,cap_hit,expiry_status,section,checked`.
+`contracts/info.json` holds the date the figures were looked up, which the
+page shows.
 
-That folder is deliberately not stored in this public repository. Salary
-sites do not allow their figures to be copied and republished, so only add
-figures you have the right to publish.
+This file does **not** update itself. It is a snapshot from one day, and goes
+out of date with every signing and trade. Ask for a refresh a few times a
+season (after the July signing period, at the start of the season, and after
+the trade deadline). If the file is deleted, the Contracts page and its menu
+link are simply left out.
 
 ## Not affiliated with the NHL
 

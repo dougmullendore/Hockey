@@ -11,6 +11,7 @@ on:
     paths:
       - 'pipeline/**'
       - 'site/**'
+      - 'contracts/**'
       - 'requirements.txt'
       - '.github/workflows/update.yml'
 
