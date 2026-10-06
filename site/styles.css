@@ -55,7 +55,7 @@ a { color: var(--blue); text-underline-offset: 2px; }
   display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none;
   font-weight: 800; font-size: 1.5rem; font-stretch: 68%; letter-spacing: .01em; line-height: 1;
 }
-.brand-mark { width: 26px; height: 26px; color: var(--red); }
+.brand-mark { width: 32px; height: 32px; flex: none; }
 .nav { display: flex; gap: 2px; flex-wrap: wrap; margin-left: -8px; }
 .nav a {
   color: var(--ink); text-decoration: none; padding: 6px 10px; border-radius: 4px;
