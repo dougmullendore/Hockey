@@ -1,0 +1,82 @@
+name: Update data and site
+
+# Runs every night after the West Coast games finish, whenever the code
+# changes, and on demand from the Actions tab.
+on:
+  schedule:
+    - cron: '23 10 * * *'   # 10:23 UTC = about 5:23am Central
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'pipeline/**'
+      - 'site/**'
+      - 'requirements.txt'
+      - '.github/workflows/update.yml'
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the stored data
+        run: |
+          if git ls-remote --exit-code --heads "$REPO_URL" data >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch data "$REPO_URL" data
+          else
+            mkdir data && git -C data init -q -b data
+          fi
+          mkdir -p data/logs
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install libraries
+        run: |
+          set -o pipefail
+          pip install -r requirements.txt 2>&1 | tee data/logs/install.log
+
+      - name: Run the pipeline
+        run: |
+          set -o pipefail
+          python -m pipeline.run data dist 2>&1 | tee data/logs/last_run.log
+
+      - name: Save the data
+        if: always()
+        run: |
+          cd data
+          echo "${{ job.status }} $(date -u +%FT%TZ) ${GITHUB_SHA::12}" > logs/job_status.txt
+          git config user.name "hockey-bot"
+          git config user.email "hockey-bot@users.noreply.github.com"
+          git add -A
+          if git rev-parse -q --verify HEAD >/dev/null; then
+            git commit -q --amend -m "Data as of $(date -u +%F)" || true
+          else
+            git commit -q -m "Data as of $(date -u +%F)"
+          fi
+          git push -q -f "$REPO_URL" HEAD:data
+
+      - name: Publish the site
+        if: always() && hashFiles('dist/index.html') != ''
+        run: |
+          cd dist
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "hockey-bot"
+          git config user.email "hockey-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Site build $(date -u +%F)"
+          git push -q -f "$REPO_URL" gh-pages
