@@ -45,9 +45,14 @@ def walk_schedule(start: str, end: str, season: int, log) -> list[dict]:
             for g in day.get("games", []):
                 if g.get("season") != season or g.get("gameType") not in config.GAME_TYPES:
                     continue
+                home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
                 games[g["id"]] = {
                     "game_id": g["id"], "date": day.get("date"),
                     "game_type": g["gameType"], "state": g.get("gameState"),
+                    "start_utc": g.get("startTimeUTC"),
+                    "schedule_state": g.get("gameScheduleState"),
+                    "home": home.get("abbrev"), "away": away.get("abbrev"),
+                    "home_id": home.get("id"), "away_id": away.get("id"),
                 }
         nxt = week.get("nextStartDate")
         if not nxt or nxt <= date:
@@ -76,7 +81,10 @@ def update_season(data: Path, season: int, dates, manifest: dict, today: dt.date
     if start > today.isoformat():
         return {"season": season, "skipped": "not started", "games": 0}
 
-    sched = walk_schedule(start, min(end, today.isoformat()), season, log)
+    # the whole season, including games not played yet (needed for projections)
+    sched = walk_schedule(start, end, season, log)
+    store.write_json(Path(data) / "schedule" / f"{season}.json",
+                     sorted(sched, key=lambda g: (g["date"] or "", g["game_id"])), compact=True)
     final = [g for g in sched if is_final(g["state"])]
     pending = [g for g in sched if not is_final(g["state"]) and (g["date"] or "") <= today.isoformat()]
 
@@ -243,6 +251,25 @@ def update_official(data: Path, manifest: dict, log) -> None:
                     log(f"official {kind} totals {season}/{gt} unavailable: {e!r}")
 
 
+def update_standings(data: Path, log) -> None:
+    """Which division and conference each team is in, with the official record."""
+    try:
+        raw = nhl_api.get_json(f"{config.API_WEB}/standings/now")
+    except Exception as e:
+        log(f"standings unavailable: {e!r}")
+        return
+    rows = []
+    for s in raw.get("standings", []):
+        rows.append({
+            "team": (s.get("teamAbbrev") or {}).get("default"), "season": s.get("seasonId"),
+            "conference": s.get("conferenceName"), "division": s.get("divisionName"),
+            "gp": s.get("gamesPlayed"), "w": s.get("wins"), "l": s.get("losses"), "otl": s.get("otLosses"),
+            "pts": s.get("points"), "rw": s.get("regulationWins"), "row": s.get("regulationPlusOtWins"),
+        })
+    if rows:
+        store.write_json(Path(data) / "official" / "standings.json", rows, compact=True)
+
+
 def update_all(data: Path, log, max_minutes: float = 150) -> list[dict]:
     data = Path(data)
     manifest = store.read_json(data / "manifest.json", {}) or {}
@@ -263,4 +290,5 @@ def update_all(data: Path, log, max_minutes: float = 150) -> list[dict]:
             results.append({"season": season, "shift_error": repr(e)})
         store.write_json(data / "manifest.json", manifest)
     update_official(data, manifest, log)
+    update_standings(data, log)
     return results
