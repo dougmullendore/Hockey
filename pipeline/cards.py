@@ -164,4 +164,4 @@ def build(final: dict, out: Path, bio: dict | None = None) -> dict:
                      for s in order},
            "players": players}
     store.write_json(out / "cards.json", doc, compact=True)
-    return {"players": len(players), "seasons": len(order)}
+    return {"players": len(players), "seasons": len(order), "doc": doc}

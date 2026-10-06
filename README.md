@@ -15,6 +15,7 @@ You do not need to run anything. GitHub does it all on a schedule.
 | Standings | Projected points, playoff odds and Stanley Cup odds from simulating the rest of the season |
 | WAR | Wins above replacement for every skater and goalie, split into its parts |
 | Cards | One card per player: where he ranks at his position in each part of his game |
+| Contracts | Cap hit next to what each player's play is worth. Only appears when contract figures are supplied (see below) |
 | Goalies | Goals saved above expected, overall and on high-danger shots |
 | Skaters | Goals, assists, individual expected goals, finishing; plus on-ice results at five-on-five |
 | Lines | Forward lines, defense pairs, and how any two teammates do with and without each other |
@@ -74,6 +75,7 @@ A minute later the site is live at
 | `pipeline/onice.py` | Who was on the ice for every shot (from shift charts) |
 | `pipeline/rapm.py`, `war.py` | Isolating each player's impact, and wins above replacement |
 | `pipeline/cards.py` | Player card percentiles |
+| `pipeline/contracts.py` | Cap hits set against dollar values (optional) |
 | `pipeline/predict.py` | Game win probabilities and the season simulation |
 | `pipeline/aggregate.py` | The tables shown on the site |
 | `site/` | The web pages (HTML, CSS, JavaScript) |
@@ -84,6 +86,18 @@ To rename the site, change `SITE_NAME` in `pipeline/config.py`.
 **Once a year:** when the league announces the next season's salary cap, add
 that season's cap and minimum salary to `SALARY_CAP` in `pipeline/config.py`.
 Dollar values use the newest line until then.
+
+## Contract figures
+
+The NHL's feeds do not include salaries, so the Contracts page needs a file
+of cap hits: `contracts/cap_hits.csv`, one line per contract, with the
+columns `team,last,first,pos,cap_hit,expiry_status,section`, plus
+`contracts/info.json` saying where the numbers came from and the date. If the
+file is not there, the page and its menu link are simply left out.
+
+That folder is deliberately not stored in this public repository. Salary
+sites do not allow their figures to be copied and republished, so only add
+figures you have the right to publish.
 
 ## Not affiliated with the NHL
 

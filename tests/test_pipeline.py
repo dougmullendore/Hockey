@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover
     def module_fixture(fn):
         return fn
 
-from pipeline import aggregate, config, features, onice, rapm, store, war, xg
+from pipeline import aggregate, config, contracts, features, onice, rapm, store, war, xg
 from pipeline.parse import parse_game, parse_shifts
 
 FIX = Path(__file__).parent / "fixtures"
@@ -265,3 +265,27 @@ def test_dollar_value_of_a_win():
     assert 3.0 < rate < 4.5
     far_future, _ = war.dollars_per_war(20402041, 620.0)       # unknown season reuses the newest cap
     assert far_future == war.dollars_per_war(max(config.SALARY_CAP), 620.0)[0]
+
+
+def test_contracts_join_retained_salary_and_match_by_name():
+    import tempfile
+    folder = Path(tempfile.mkdtemp(prefix="contracts"))
+    (folder / "cap_hits.csv").write_text(
+        "team,last,first,pos,cap_hit,expiry_status,section\n"
+        "AAA,Stützle,Tim,C,6000000,UFA,R\n"
+        "BBB,Stutzle,Tim,C,2000000,UFA,X\n"          # salary kept by his old team
+        "AAA,Hughes,Jack,C,8000000,UFA,R\n"
+        "CCC,Hughes,Quinn,D,7850000,UFA,R\n"
+        "CCC,Nobody,Nils,G,900000,RFA,R\n", encoding="utf-8")
+    rows, info = contracts.load(folder)
+    assert info == {} and len(rows) == 4
+    tim = [r for r in rows if r["first"] == "Tim"][0]
+    assert tim["cap"] == 8000000 and tim["team"] == "AAA" and tim["teams"] == ["AAA"]
+    people = {"1": {"first": "Tim", "last": "Stutzle", "group": "F", "team": "AAA"},
+              "2": {"first": "Jack", "last": "Hughes", "group": "F", "team": "AAA"},
+              "3": {"first": "Luke", "last": "Hughes", "group": "D", "team": "AAA"},
+              "4": {"first": "Quinn", "last": "Hughes", "group": "D", "team": "CCC"}}
+    found, missed = contracts.match(rows, people)
+    assert {k: v["first"] for k, v in found.items()} == {"1": "Tim", "2": "Jack", "4": "Quinn"}
+    assert [m["last"] for m in missed] == ["Nobody"]
+    assert contracts.load(folder / "missing") == ([], {})       # no file, no page

@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import cards, config, features, onice, store, war, xg
+from . import cards, config, contracts, features, onice, store, war, xg
 
 HIGH_DANGER = 0.15   # a shot worth 15%+ is a high-danger chance
 MED_DANGER = 0.05
@@ -506,8 +506,13 @@ def _finish_war(data: Path, out: Path, all_games: dict, manifest: dict, log) -> 
                     check.append((w, pts[team]))
         rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in res["rows"]]
         store.write_json(out / f"war_{season}_regular.json", rows, compact=True)
-    card_info = cards.build(final, out, store.read_json(data / "official" / "players.json", {}) or {})
+    bio = store.read_json(data / "official" / "players.json", {}) or {}
+    card_info = cards.build(final, out, bio)
+    card_doc = card_info.pop("doc")
     log(f"cards: {card_info}")
+    contract_info = contracts.build(card_doc, bio, out, log=log)
+    if not contract_info and (out / "contracts.json").exists():
+        (out / "contracts.json").unlink()
     notes = final[max(final)]["notes"]
     meta = {"goals_per_win": gpw, "scale": notes["scale"],
             "replacement_per60": notes["replacement_per60"],
@@ -517,6 +522,7 @@ def _finish_war(data: Path, out: Path, all_games: dict, manifest: dict, log) -> 
             "seasons": {str(s): {"total": r["notes"]["total_war"], "skaters": r["notes"]["skater_war"],
                                  "goalies": r["notes"]["goalie_war"]} for s, r in final.items()},
             "dollars_per_war": {str(s): r["notes"].get("dollars_per_war") for s, r in final.items()},
+            "contracts": contract_info or None,
             "settings": {"lambda_ev": config.WAR_LAMBDA_EV, "lambda_pp": config.WAR_LAMBDA_PP,
                          "fade": config.WAR_PRIOR_FADE, "finishing_k": config.WAR_FINISHING_K}}
     if len(check) >= 20:

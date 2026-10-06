@@ -3,3 +3,6 @@ __pycache__/
 /out/
 /data/
 .venv/
+
+# contract snapshot: not for the public repository (see contract-value-plan)
+/contracts/

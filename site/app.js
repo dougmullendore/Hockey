@@ -45,6 +45,8 @@
     s1: function (v) { return v == null ? "" : (v > 0 ? "+" : "") + v.toFixed(1).replace("-", MINUS); },
     s2: function (v) { return v == null ? "" : (v > 0 ? "+" : "") + v.toFixed(2).replace("-", MINUS); },
     usd: function (v) { return v == null ? "" : "$" + v.toFixed(1) + "M"; },
+    usd2: function (v) { return v == null ? "" : "$" + v.toFixed(2) + "M"; },
+    susd: function (v) { return v == null ? "" : (v > 0 ? "+" : v < 0 ? MINUS : "") + "$" + Math.abs(v).toFixed(1) + "M"; },
     txt: function (v) { return v == null ? "" : String(v); }
   };
   function niceDate(iso, withYear) {
@@ -589,6 +591,7 @@
       var money = (doc.money || {})[cs.season], worth = null;
       var minPay = money ? money[1] * (cs.single ? Math.min(1, (y.gp || 0) / 82) : (goalie ? 50 / 82 : 1)) : 0;
       if (money && money[0] && val[0] != null) worth = Math.max(minPay, minPay + val[0] * money[0]);
+      if (pl.c != null && cs.season === years[years.length - 1]) bits.push("Cap hit $" + pl.c.toFixed(2) + "M");
       if (worth != null) bits.push(cs.single ? "Value delivered: $" + worth.toFixed(1) + "M" : "Worth about $" + worth.toFixed(1) + "M a season at this level");
       card.appendChild(el("header", { "class": "pcard-head" }, [
         el("div", {}, [el("h2", { text: pl.n }),
@@ -649,6 +652,59 @@
     }).catch(function () {
       holder.innerHTML = "";
       holder.appendChild(el("p", { "class": "empty", text: "Player cards could not be loaded. Reload the page to try again." }));
+    });
+  }
+
+  // ------------------------------------------------- paid versus worth --
+  var CONTRACT_COLS = [
+    ["name", "Player", "", F.txt, { name: 1, link: 1 }],
+    ["team", "Team", "The team carrying most of his cap hit", F.txt, { left: 1 }],
+    ["pos", "Pos", "Forward, defenseman or goalie", F.txt, { left: 1 }],
+    ["age", "Age", "Age today", F.int],
+    ["cap", "Cap hit", "What he counts against the salary cap this season, in millions. Salary kept by a former team is added back in", F.usd2, { grp: 1 }],
+    ["worth", "Worth", "What his recent play would cost at the going rate for a win: the league-minimum salary plus his WAR rate times the price of a win", F.usd],
+    ["surplus", "Surplus", "Worth minus cap hit. Positive means his team gets more than it pays for", F.susd, { bar: 1 }],
+    ["war", "WAR rate", "WAR per 82 games (per 50 for a goalie), blended over up to three seasons with the newest counting most", F.d2, { grp: 1, sign: 1 }],
+    ["games", "Games", "Regular-season games behind the WAR rate. Fewer games means a shakier number", F.int]
+  ];
+  function contractsPage() {
+    var info = (meta.war || {}).contracts;
+    var st = state.contracts || (state.contracts = { sort: "surplus", dir: -1, q: "", pos: "", min: 82 });
+    main.innerHTML = "";
+    main.appendChild(el("h1", { text: "Paid versus worth" }));
+    main.appendChild(el("p", { "class": "lede", text: "Each player's cap hit next to what his recent play is worth at the going rate for a win. The gap shows who is a bargain and who is not earning his deal." }));
+    var controls = el("div", { "class": "controls" }), holder = el("div");
+    main.appendChild(controls); main.appendChild(holder);
+    if (!info) { holder.appendChild(el("p", { "class": "empty", text: "Contract figures have not been added yet." })); return; }
+    holder.appendChild(el("p", { "class": "loading", text: "Loading\u2026" }));
+    load("contracts").then(function (rows) {
+      var psel = el("select", { onchange: function () { st.pos = psel.value; draw(); } },
+        [["", "Everyone"], ["S", "Skaters"], ["F", "Forwards"], ["D", "Defensemen"], ["G", "Goalies"]].map(function (o) { return el("option", { value: o[0], text: o[1], selected: o[0] === st.pos }); }));
+      var msel = el("select", { onchange: function () { st.min = +msel.value; draw(); } },
+        [20, 41, 82, 164].map(function (s) { return el("option", { value: s, text: s + "+", selected: s === st.min }); }));
+      var q = el("input", { type: "search", value: st.q, placeholder: "Name or team", oninput: function () { st.q = q.value; draw(); } });
+      controls.appendChild(el("label", { "class": "field" }, ["Position", psel]));
+      controls.appendChild(el("label", { "class": "field" }, ["Minimum games in sample", msel]));
+      controls.appendChild(el("label", { "class": "field" }, ["Search", q]));
+      function draw() {
+        var needle = st.q.trim().toLowerCase();
+        var shown = rows.filter(function (r) {
+          if (r.worth == null || (r.games || 0) < st.min) return false;
+          if (st.pos && (st.pos === "S" ? r.pos === "G" : r.pos !== st.pos)) return false;
+          if (needle && String(r.name || "").toLowerCase().indexOf(needle) < 0 && String(r.team || "").toLowerCase().indexOf(needle) < 0) return false;
+          return true;
+        });
+        holder.innerHTML = "";
+        if (!shown.length) { holder.appendChild(el("p", { "class": "empty", text: "No players match these filters. Lower the minimum or clear the search." })); return; }
+        holder.appendChild(statsTable(CONTRACT_COLS, shown, st, draw));
+        holder.appendChild(el("p", { "class": "note", text: "Showing " + shown.length.toLocaleString("en-US") + " of " + rows.length.toLocaleString("en-US") + " players under contract. Cap hits" +
+          (info.as_of ? " as of " + niceDate(info.as_of, true) : "") + (info.source ? ", from " + info.source : "") + ". A win is priced at $" + info.dollars_per_war.toFixed(1) + " million." }));
+        holder.appendChild(el("p", { "class": "note", text: "Read with care. Players on entry-level deals almost always show a surplus, because the league caps what they can be paid. Goalies swing more from year to year than teams will pay for, so their worth runs high in good years and low in bad ones. Worth looks back at what a player has done; a contract pays for what he is expected to do, so a young star on a new deal can look overpaid before he has played into it." }));
+      }
+      draw();
+    }).catch(function () {
+      holder.innerHTML = "";
+      holder.appendChild(el("p", { "class": "empty", text: "This table could not be loaded. Reload the page to try again." }));
     });
   }
 
@@ -822,7 +878,7 @@
       "<p>For the standings, the rest of the schedule is simulated thousands of times, followed by the playoff bracket. The model does not know about injuries, trades, or starting goalies, so it will be slow to react to a roster change.</p>" +
       "<h2>Dollar values</h2>" +
       "<p id='ab-money'>A player's value in dollars is his WAR times the going rate for a win, plus the league-minimum salary.</p>" +
-      "<p>It is a measure of what the performance was worth, not a prediction of the next contract, and it is not compared with actual salaries yet. WAR-based values run high for goalies, whose results swing more from year to year than teams are willing to pay for.</p>" +
+      "<p id='ab-pay'>It is a measure of what the performance was worth, not a prediction of the next contract, and it is not compared with actual salaries yet. WAR-based values run high for goalies, whose results swing more from year to year than teams are willing to pay for.</p>" +
       "<h2>Player cards</h2>" +
       "<p>A card ranks a player against others at his position, on rates rather than totals so missed games do not count against him. By default it blends three seasons, with the newest counting three times as much as the oldest, because one season is a small sample for most of these measures. Players without regular ice time of a given kind (the power play, say) are not ranked on it.</p>" +
       "<h2>On-ice numbers</h2>" +
@@ -855,6 +911,7 @@
       document.getElementById("ab-money").textContent = "A player's value in dollars is his WAR times the going rate for a win, plus the league-minimum salary. The rate comes from league payroll: after every roster spot is paid the minimum, what teams have left to spend buys all the wins above replacement. For " +
         lastS.slice(0, 4) + "-" + lastS.slice(6) + " that works out to about $" + wm.dollars_per_war[lastS].toFixed(1) + " million per win.";
     }
+    if (wm.contracts) document.getElementById("ab-pay").textContent = "It is a measure of what the performance was worth, not a prediction of the next contract. The Contracts page sets it beside each player's cap hit, using his WAR rate over up to three seasons. WAR-based values run high for goalies, whose results swing more from year to year than teams are willing to pay for, and players on entry-level deals nearly always look underpaid because their pay is capped by rule.";
     if (wm.goals_per_win) {
       var tc = wm.team_check, done = Object.keys(wm.seasons || {}).sort(), ref = wm.seasons[done[Math.max(0, done.length - 2)]] || {};
       document.getElementById("ab-war").textContent = "Goals become wins at " + wm.goals_per_win.toFixed(1) + " goals per win, measured from team results. A drawn penalty is worth about " + wm.penalty_value.toFixed(2) + " goals. " +
@@ -909,6 +966,7 @@
     var pm = /^player-(\d+)$/.exec(r);
     if (pm || r === "cards") { cardPage(pm ? pm[1] : null); window.scrollTo(0, 0); return; }
     if (r === "standings") { oddsPage(); document.title = "Projected standings | " + meta.site; window.scrollTo(0, 0); return; }
+    if (r === "contracts") { contractsPage(); document.title = "Paid versus worth | " + meta.site; window.scrollTo(0, 0); return; }
     if (r === "upcoming") { upcomingPage(); document.title = "Upcoming games | " + meta.site; window.scrollTo(0, 0); return; }
     if (PAGES[r]) tablePage(r); else if (r === "wowy") wowyPage(); else if (r === "about") about(); else home();
     document.title = (r === "war" ? "WAR | " : PAGES[r] ? PAGES[r].title + " | " : r === "wowy" ? "With or without | " : r === "about" ? "About | " : "") + meta.site;
@@ -920,6 +978,8 @@
     state.season = m.seasons[0].id;
     state.type = m.seasons[0].types[m.seasons[0].types.length - 1].id;
     document.getElementById("brand-name").textContent = m.site;
+    var cnav = document.querySelector('.nav a[data-route="contracts"]');
+    if (cnav && m.war && m.war.contracts) cnav.hidden = false;
     var d = new Date(m.updated_utc);
     document.getElementById("foot-updated").textContent = "Updated " + (isNaN(d) ? m.updated_utc : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })) + ".";
     window.addEventListener("hashchange", route);

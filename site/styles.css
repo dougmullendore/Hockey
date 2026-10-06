@@ -61,6 +61,7 @@ a { color: var(--blue); text-underline-offset: 2px; }
   color: var(--ink); text-decoration: none; padding: 6px 10px; border-radius: 4px;
   font-weight: 600; font-stretch: 88%;
 }
+.nav a[hidden] { display: none; }
 .nav a:hover { background: var(--ice); }
 .nav a[aria-current="page"] { background: var(--blue); color: var(--sheet); }
 
