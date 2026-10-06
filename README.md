@@ -11,7 +11,8 @@ You do not need to run anything. GitHub does it all on a schedule.
 | Page | What it shows |
 | --- | --- |
 | Home | A shot map for each recent game, plus season leaders |
-| Games | Every game: the score next to the expected goals |
+| Games | Every game: the score next to the expected goals; plus win probabilities for the next week |
+| Standings | Projected points, playoff odds and Stanley Cup odds from simulating the rest of the season |
 | WAR | Wins above replacement for every skater and goalie, split into its parts |
 | Cards | One card per player: where he ranks at his position in each part of his game |
 | Goalies | Goals saved above expected, overall and on high-danger shots |
@@ -31,7 +32,7 @@ The file `.github/workflows/update.yml` tells GitHub to run the pipeline:
 - whenever the code changes
 - whenever you press **Run workflow** on the repository's **Actions** tab
 
-Each run does four things, in order:
+Each run does these things, in order:
 
 1. **Fetch**: download any finished games not stored yet (play-by-play and
    shift charts), and re-check the last three days for the league's stat
@@ -40,7 +41,9 @@ Each run does four things, in order:
    season has just finished. Otherwise skip.
 3. **Stats**: score every shot and build the goalie, skater, team and game
    tables.
-4. **Site**: put the pages and tables together.
+4. **Odds**: rate every team, predict the coming week's games, and simulate
+   the rest of the season for playoff and Stanley Cup odds.
+5. **Site**: put the pages and tables together.
 
 Results are stored on two side branches of this repository:
 
@@ -70,6 +73,8 @@ A minute later the site is live at
 | `pipeline/features.py`, `xg.py` | The expected-goals model |
 | `pipeline/onice.py` | Who was on the ice for every shot (from shift charts) |
 | `pipeline/rapm.py`, `war.py` | Isolating each player's impact, and wins above replacement |
+| `pipeline/cards.py` | Player card percentiles |
+| `pipeline/predict.py` | Game win probabilities and the season simulation |
 | `pipeline/aggregate.py` | The tables shown on the site |
 | `site/` | The web pages (HTML, CSS, JavaScript) |
 | `tests/` | Checks run against four real games |

@@ -207,7 +207,7 @@
     skaters: { title: "Skaters", tabs: SKATER_TABS, sort: "ixg", lede: "Shot volume and shot quality for every skater, and whether the goals have kept up with the chances.",
       min: { key: "gp", label: "Minimum games played", steps: [0, 5, 10, 20, 40, 60] }, search: "name", pos: 1, noun: "skaters" },
     teams: { title: "Teams", sort: "xg_pct", lede: "Which teams are creating better chances than they give up, and which are riding the percentages.", noun: "teams" },
-    games: { title: "Games", sort: "date", lede: "Every game with the final score next to what the chances said it should have been.", search: "_teams", noun: "games" }
+    games: { title: "Games", tabs: [["games", "Results"], ["upcoming", "Upcoming"]], sort: "date", lede: "Every game with the final score next to what the chances said it should have been.", search: "_teams", noun: "games" }
   };
 
   // -------------------------------------------------------------- pages --
@@ -404,6 +404,93 @@
       : ((g.hxg > g.axg) === (g.hs > g.as) ? "The team with the better chances won." : "The team with the better chances lost.");
     card.appendChild(el("p", { style: "margin:0", text: verdict }));
     return card;
+  }
+
+  // ------------------------------------------------- standings and odds --
+  var ODDS_COLS = [
+    ["team", "Team", "", F.txt, { name: 1 }],
+    ["gp", "GP", "Games played", F.int],
+    ["w", "W", "Wins", F.int],
+    ["l", "L", "Regulation losses", F.int],
+    ["otl", "OTL", "Overtime and shootout losses", F.int],
+    ["pts", "PTS", "Standings points so far", F.int],
+    ["strength", "Strength", "Chance of beating an average team on neutral ice, from recent chances and results", F.pct, { grp: 1, mid: 50 }],
+    ["proj_pts", "Proj PTS", "Average final points across the simulated seasons", F.d1, { grp: 1 }],
+    ["range", "Likely range", "Eight seasons in ten finish inside this range", F.txt],
+    ["playoffs", "Playoffs", "Chance of making the playoffs, in percent", F.pct, { grp: 1, bar: 0.0001 }],
+    ["division", "Win division", "Chance of finishing first in the division", F.pct],
+    ["r2", "Round 2", "Chance of winning a first-round series", F.pct, { grp: 1 }],
+    ["r3", "Conf final", "Chance of reaching the conference final", F.pct],
+    ["final", "Cup final", "Chance of reaching the Stanley Cup final", F.pct],
+    ["cup", "Win Cup", "Chance of winning the Stanley Cup", F.pct]
+  ];
+  function oddsPage() {
+    var st = state.odds || (state.odds = { sort: "proj_pts", dir: -1, group: "" });
+    main.innerHTML = "";
+    main.appendChild(el("h1", { text: "Projected standings" }));
+    main.appendChild(el("p", { "class": "lede", text: "Where every team is headed. The rest of the schedule is played out thousands of times using each team's current strength; the percentages are how often each thing happened." }));
+    var controls = el("div", { "class": "controls" }), holder = el("div");
+    main.appendChild(controls); main.appendChild(holder);
+    holder.appendChild(el("p", { "class": "loading", text: "Loading\u2026" }));
+    load("odds").then(function (o) {
+      var rows = o.teams.map(function (r) { var c = {}; for (var k in r) c[k] = r[k]; c.range = r.pts_lo == null ? "" : r.pts_lo + " to " + r.pts_hi; return c; });
+      var groups = [["", "Whole league"], ["Eastern", "Eastern Conference"], ["Western", "Western Conference"]];
+      rows.map(function (r) { return r.division; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort().forEach(function (d) { groups.push([d, d + " Division"]); });
+      var gsel = el("select", { id: "f-odds-group", onchange: function () { st.group = gsel.value; draw(); } },
+        groups.map(function (g) { return el("option", { value: g[0], text: g[1], selected: g[0] === st.group }); }));
+      controls.appendChild(el("label", { "class": "field" }, ["Show", gsel]));
+      function draw() {
+        holder.innerHTML = "";
+        var shown = rows.filter(function (r) { return !st.group || r.conference === st.group || r.division === st.group; });
+        holder.appendChild(statsTable(ODDS_COLS, shown, st, draw));
+        holder.appendChild(el("p", { "class": "note", text: seasonLabel(o.season) + " season, " + o.games_left.toLocaleString("en-US") + " games left, " + o.sims.toLocaleString("en-US") +
+          " simulated seasons. The model knows results and shot quality, not injuries, trades or who starts in goal, so treat early-season numbers as a starting point." }));
+      }
+      draw();
+    }).catch(function () {
+      holder.innerHTML = "";
+      holder.appendChild(el("p", { "class": "empty", text: "Projections are not available yet. Check back after tonight's update." }));
+    });
+  }
+
+  function gameDay(iso) {
+    var d = new Date(iso + "T12:00:00");
+    return isNaN(d) ? iso : d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  }
+  function upcomingPage() {
+    main.innerHTML = "";
+    main.appendChild(el("h1", { text: "Games" }));
+    main.appendChild(tabBar(PAGES.games.tabs, "upcoming"));
+    main.appendChild(el("p", { "class": "lede", text: "The next week of games with each team's chance of winning." }));
+    var holder = el("div", { "class": "fixtures" });
+    main.appendChild(holder);
+    holder.appendChild(el("p", { "class": "loading", text: "Loading\u2026" }));
+    load("odds").then(function (o) {
+      holder.innerHTML = "";
+      if (!o.upcoming.length) { holder.appendChild(el("p", { "class": "empty", text: "No games are scheduled in the next week." })); return; }
+      var day = null, list = null;
+      o.upcoming.forEach(function (g) {
+        if (g.date !== day) { day = g.date; holder.appendChild(el("h2", { text: gameDay(g.date) })); list = el("div", { "class": "fixlist" }); holder.appendChild(list); }
+        var ph = Math.round(g.p_home * 100), pa = 100 - ph, t = g.start_utc ? new Date(g.start_utc) : null;
+        var note = [g.away_b2b ? g.away + " played the day before" : "", g.home_b2b ? g.home + " played the day before" : ""].filter(Boolean).join("; ");
+        list.appendChild(el("div", { "class": "fixture" }, [
+          el("span", { "class": "ftime", text: t && !isNaN(t) ? t.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "" }),
+          el("span", { "class": "fteam away" + (pa > ph ? " fav" : ""), text: g.away }),
+          el("b", { "class": "fpct", text: pa + "%" }),
+          el("span", { "class": "fbar", role: "img", "aria-label": g.away + " " + pa + "%, " + g.home + " " + ph + "%" }, [
+            el("i", { "class": "a", style: "width:" + pa + "%" }), el("i", { "class": "h", style: "width:" + ph + "%" })]),
+          el("b", { "class": "fpct", text: ph + "%" }),
+          el("span", { "class": "fteam home" + (ph > pa ? " fav" : ""), text: g.home }),
+          el("span", { "class": "fnote", text: note })
+        ]));
+      });
+      var m = o.model || {};
+      holder.appendChild(el("p", { "class": "note", text: "Away team on the left, home team on the right. " +
+        (m.accuracy ? "Tested on " + m.games.toLocaleString("en-US") + " past games it had not seen, the favorite won " + Math.round(m.accuracy * 100) + "% of the time." : "") }));
+    }).catch(function () {
+      holder.innerHTML = "";
+      holder.appendChild(el("p", { "class": "empty", text: "Upcoming games are not available yet. Check back after tonight's update." }));
+    });
   }
 
   // ------------------------------------------------------ player cards --
@@ -674,7 +761,7 @@
 
     var latest = meta.seasons[0], lt = latest.types[latest.types.length - 1];
     var sfx = "_" + latest.id + "_" + lt.id;
-    Promise.all([load("goalies" + sfx), load("war_" + latest.id + "_regular").catch(function () { return []; }), load("teams" + sfx)]).then(function (d) {
+    Promise.all([load("goalies" + sfx), load("war_" + latest.id + "_regular").catch(function () { return []; }), load("odds").catch(function () { return null; })]).then(function (d) {
       function block(title, rows, val, fmt, route, sub, linkText) {
         var ol = el("ol", {}, rows.slice(0, 5).map(function (r, i) {
           return el("li", {}, [el("span", { "class": "rk", text: String(i + 1) }),
@@ -690,7 +777,7 @@
       var sk = d[1].filter(function (r) { return r.pos !== "G"; });
       if (sk.length) leaders.appendChild(block("Wins above replacement, skaters", by(sk, "war"), "war", F.d2, "war", whenReg, "Full WAR table"));
       leaders.appendChild(block("Goals saved above expected", by(d[0], "gsax"), "gsax", F.s1, "goalies", when));
-      leaders.appendChild(block("Share of expected goals", by(d[2], "xg_pct"), "xg_pct", function (v) { return F.pct(v) + "%"; }, "teams", when));
+      if (d[2] && d[2].teams.length) leaders.appendChild(block("Stanley Cup odds", by(d[2].teams, "cup"), "cup", function (v) { return F.pct(v) + "%"; }, "standings", d[2].sims.toLocaleString("en-US") + " simulated seasons", "Projected standings"));
     }).catch(function () {});
   }
 
@@ -716,6 +803,10 @@
       "<p>For skaters it adds six parts. Four come from a regression that looks at every stretch of play and works out each skater's own effect on chances, with his linemates, opponents, the score and where his shifts started taken into account: five-on-five offense, five-on-five defense, power play and penalty kill. The other two are counted directly: finishing (goals beyond what his shots were worth) and penalties drawn minus taken. Goalies are rated on goals saved above expected.</p>" +
       "<p id='ab-war'></p>" +
       "<p>A few choices are worth knowing about. Forwards and defensemen are each rated against their own position. A skater's rating starts each season from a faded copy of last season's and from the typical level for his role on the team, then moves as evidence comes in, so early-season numbers lean on last year. Only part of a hot or cold shooting season is credited, because finishing mostly does not repeat. And the regression cannot fully separate players who are always on the ice together, so it splits their credit.</p>" +
+      "<h2>Predictions</h2>" +
+      "<p>Each team carries a running strength rating built from two things: how well it out-chances opponents (expected goals), and how far its actual goals run ahead of or behind those chances. Recent games count more, and every team is pulled part of the way back to average over the summer. A game's win probability comes from the gap between the two ratings, home ice, and whether either team played the night before.</p>" +
+      "<p id='ab-pred'></p>" +
+      "<p>For the standings, the rest of the schedule is simulated thousands of times, followed by the playoff bracket. The model does not know about injuries, trades, or starting goalies, so it will be slow to react to a roster change.</p>" +
       "<h2>Player cards</h2>" +
       "<p>A card ranks a player against others at his position, on rates rather than totals so missed games do not count against him. By default it blends three seasons, with the newest counting three times as much as the oldest, because one season is a small sample for most of these measures. Players without regular ice time of a given kind (the power play, say) are not ranked on it.</p>" +
       "<h2>On-ice numbers</h2>" +
@@ -736,6 +827,12 @@
     if (total) document.getElementById("ab-shifts").textContent = "Shift records are available for " + have.toLocaleString("en-US") + " of " + total.toLocaleString("en-US") + " games" +
       (gaps.length ? ". The missing games (" + gaps.join(", ") + ") are left out of the on-ice tables." : ".") +
       " Ice time added up from them matches the league's official totals to within half a percent for nearly every skater.";
+    load("odds").then(function (o) {
+      var m = o.model || {};
+      if (!m.games) return;
+      document.getElementById("ab-pred").textContent = "Tested on " + m.games.toLocaleString("en-US") + " games from seasons the weights were not fitted on, the favorite won " + (100 * m.accuracy).toFixed(1) +
+        "% of the time. Always picking the home team wins " + (100 * m.home_win_rate).toFixed(1) + "%. On log loss, the usual score for probabilities (lower is better), it scored " + m.log_loss.toFixed(3) + " against " + m.baseline_log_loss.toFixed(3) + " for that baseline.";
+    }).catch(function () {});
     var wm = meta.war || {};
     if (wm.goals_per_win) {
       var tc = wm.team_check, done = Object.keys(wm.seasons || {}).sort(), ref = wm.seasons[done[Math.max(0, done.length - 2)]] || {};
@@ -785,11 +882,13 @@
     var r = (location.hash.replace(/^#\/?/, "").split("?")[0] || "home").toLowerCase();
     Array.prototype.forEach.call(document.querySelectorAll(".nav a"), function (a) {
       var player = /^player-(\d+)$/.exec(r);
-      var navKey = r === "wowy" ? "lines" : player ? "cards" : (PAGES[r] && PAGES[r].nav) || r;
+      var navKey = r === "wowy" ? "lines" : r === "upcoming" ? "games" : player ? "cards" : (PAGES[r] && PAGES[r].nav) || r;
       if (a.dataset.route === navKey) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     var pm = /^player-(\d+)$/.exec(r);
     if (pm || r === "cards") { cardPage(pm ? pm[1] : null); window.scrollTo(0, 0); return; }
+    if (r === "standings") { oddsPage(); document.title = "Projected standings | " + meta.site; window.scrollTo(0, 0); return; }
+    if (r === "upcoming") { upcomingPage(); document.title = "Upcoming games | " + meta.site; window.scrollTo(0, 0); return; }
     if (PAGES[r]) tablePage(r); else if (r === "wowy") wowyPage(); else if (r === "about") about(); else home();
     document.title = (r === "war" ? "WAR | " : PAGES[r] ? PAGES[r].title + " | " : r === "wowy" ? "With or without | " : r === "about" ? "About | " : "") + meta.site;
     window.scrollTo(0, 0);

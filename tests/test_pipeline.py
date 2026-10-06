@@ -210,3 +210,48 @@ def test_card_percentiles_rank_within_position():
     pct = cards._percentiles(blended, [("war", "toi", 0.25)], True)
     assert pct[1][0] == [5] and pct[10][0] == [95] and pct[99][0] == [None]
     assert pct[10][1] == [10.0]
+
+
+def test_series_odds():
+    import numpy as np
+    from pipeline import predict
+    assert abs(float(predict._series(0.5, 0.5)) - 0.5) < 1e-9
+    assert abs(float(predict._series(0.6, 0.6)) - 0.710208) < 1e-6      # textbook best-of-seven
+    assert float(predict._series(0.6, 0.5)) > float(predict._series(0.5, 0.6)) > 0.5   # home ice helps a little
+    assert float(predict._series(1.0, 1.0)) == 1.0
+
+
+def test_ratings_only_use_the_past():
+    import pandas as pd
+    from pipeline import predict
+    G = pd.DataFrame({
+        "season": [1, 1, 2], "home": ["A", "B", "A"], "away": ["B", "A", "B"],
+        "day": pd.to_datetime(["2025-01-01", "2025-01-02", "2025-10-10"]),
+        "hxg": [4.0, 1.0, 2.0], "axg": [1.0, 3.0, 2.0], "hg": [5, 1, 2], "ag": [1, 2, 2],
+    })
+    X, r = predict.walk(G)
+    assert list(X[0]) == [0.0, 0.0, 0.0, 0.0]            # nothing known before the first game
+    assert X[1][0] < 0 and X[1][2] == 1.0 and X[1][3] == 1.0   # B was out-chanced; both played yesterday
+    assert 0 < X[2][0] < -X[1][0] * 2 and X[2][2] == 0.0  # A still ahead after the summer, nobody tired
+
+
+def test_season_simulation_adds_up():
+    import numpy as np
+    import pandas as pd
+    from sklearn.linear_model import LogisticRegression
+    from pipeline import predict
+    division_of = {t: d for d, members in predict.DIVISIONS.items() for t in members}
+    teams = sorted(division_of)
+    rng = np.random.default_rng(1)
+    model = LogisticRegression().fit(rng.normal(size=(200, 4)), rng.integers(0, 2, 200))
+    model.coef_[:] = [[1.2, 0.5, -0.3, 0.4]]
+    model.intercept_[:] = [0.12]
+    remaining = [(h, a, 0.0, 0.0) for h in teams for a in teams if h != a]
+    strength = {t: (0.6 if t == "COL" else -0.6 if t == "CHI" else 0.0, 0.0) for t in teams}
+    sim = predict.simulate(teams, division_of, pd.DataFrame(), remaining, strength, model, n=1500)
+    assert abs(sum(v["playoffs"] for v in sim.values()) - 1600) < 0.5     # sixteen teams every time
+    assert abs(sum(v["cup"] for v in sim.values()) - 100) < 0.5           # one champion every time
+    assert abs(sum(v["division"] for v in sim.values()) - 400) < 0.5
+    assert sim["COL"]["playoffs"] > 95 and sim["CHI"]["playoffs"] < 5
+    assert sim["COL"]["cup"] == max(v["cup"] for v in sim.values())
+    assert all(v["pts_lo"] <= v["proj_pts"] <= v["pts_hi"] for v in sim.values())

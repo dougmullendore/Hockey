@@ -62,6 +62,10 @@ def main(data_dir: str, out_dir: str) -> int:
         from . import aggregate
         return aggregate.build_all(data, log)
 
+    def do_odds():
+        from . import predict
+        return predict.build(data, data / "site_data", log)
+
     def do_site():
         from . import build_site
         return build_site.build(data, out, log)
@@ -69,6 +73,7 @@ def main(data_dir: str, out_dir: str) -> int:
     stage("fetch", do_fetch)
     stage("model", do_model)
     stage("stats", do_stats)
+    stage("odds", do_odds)
     stage("site", do_site)
 
     status["finished_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")

@@ -170,6 +170,24 @@ table.stats { border-collapse: separate; border-spacing: 0; width: 100%; font-si
 .bar .n { justify-self: end; background: var(--red); grid-column: 1; }
 .bar .p { justify-self: start; background: var(--blue); grid-column: 2; }
 
+/* ---------- upcoming games */
+.fixtures h2 { margin: 26px 0 6px; font-size: 1.25rem; }
+.fixlist { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; max-width: 860px; }
+.fixture { display: grid; grid-template-columns: 5.2em 3.2em 3em minmax(60px, 1fr) 3em 3.2em minmax(0, 1.4fr); align-items: center; gap: 4px 10px; padding: 9px 14px; border-bottom: 1px solid var(--rule-soft); }
+.fixture:last-child { border-bottom: 0; }
+.ftime, .fnote { color: var(--ink-2); font-size: .8125rem; }
+.fteam { font-weight: 600; font-stretch: 85%; font-size: 1.0625rem; }
+.fteam.away { text-align: right; }
+.fteam.fav { font-weight: 800; }
+.fpct { font-stretch: 85%; text-align: center; }
+.fbar { display: flex; height: 12px; border-radius: 2px; overflow: hidden; gap: 2px; }
+.fbar i { display: block; height: 100%; }
+.fbar .a { background: var(--away); } .fbar .h { background: var(--blue); }
+@media (max-width: 700px) {
+  .fixture { grid-template-columns: 3em 2.8em minmax(40px, 1fr) 2.8em 3em; padding: 9px 10px; }
+  .ftime, .fnote { grid-column: 1 / -1; }
+}
+
 /* ---------- player card */
 .field.search { position: relative; }
 .field.search input { width: 220px; }

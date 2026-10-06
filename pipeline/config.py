@@ -41,6 +41,21 @@ WAR_FINISHING_K = 20.0
 # Fallback until there is a full season to measure it from.
 WAR_GOALS_PER_WIN = 6.0
 
+# --- Game predictions and season simulation ------------------------------
+# How fast team ratings forget: each game back counts this fraction of the next.
+PRED_CHANCES_DECAY = 0.97       # expected-goal difference (steady, so it can move fast)
+PRED_RESULTS_DECAY = 0.995      # goals beyond expected (noisy, so it moves slowly)
+# Games of "average team" mixed in before a rating is trusted.
+PRED_CHANCES_PRIOR = 20.0
+PRED_RESULTS_PRIOR = 80.0
+# Share of a rating's weight kept over the summer.
+PRED_SUMMER_FADE = 0.5
+# ...and how much of its distance from average a team keeps over the summer.
+PRED_SUMMER_REGRESS = 0.8
+# Doubt about each team's true strength in the season simulation (logit units).
+PRED_STRENGTH_DOUBT = 0.25
+PRED_SIMULATIONS = 10000
+
 # Game types: 2 = regular season, 3 = playoffs.
 GAME_TYPES = {2: "regular", 3: "playoffs"}
 
