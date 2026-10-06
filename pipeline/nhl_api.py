@@ -56,6 +56,10 @@ def pbp_url(game_id: int) -> str:
     return f"{config.API_WEB}/gamecenter/{game_id}/play-by-play"
 
 
+def shifts_url(game_id: int) -> str:
+    return f"{config.API_STATS}/shiftcharts?cayenneExp=gameId={game_id}"
+
+
 def schedule_url(date: str) -> str:
     return f"{config.API_WEB}/schedule/{date}"
 

@@ -27,6 +27,8 @@ ROSTER_COLS = [
     "position", "sweater",
 ]
 
+SHIFT_COLS = ["game_id", "team_id", "player_id", "period", "start", "end"]
+
 SHOT_TYPES = ("goal", "shot-on-goal", "missed-shot", "blocked-shot")
 
 # Which fields of an event hold the "main" player and the supporting ones.
@@ -178,3 +180,33 @@ def _fix_orientation(rows):
         if r[_I["period"]] in bad_periods and r[_I["x_adj"]] is not None:
             r[_I["x_adj"]] = -r[_I["x_adj"]]
             r[_I["y_adj"]] = -r[_I["y_adj"]]
+
+
+def parse_shifts(raw: dict, game_id: int) -> list[tuple]:
+    """Shift chart rows -> (game, team, player, period, start, end) in seconds.
+
+    Each row says one player was on the ice from `start` to `end` of a
+    period. Goal markers and broken rows are dropped, and exact duplicates
+    (the feed repeats some shifts) are removed."""
+    seen, out = set(), []
+    for r in raw.get("data", []) or []:
+        if r.get("typeCode") != 517 or r.get("playerId") is None or r.get("teamId") is None:
+            continue
+        period, start, end = r.get("period"), _clock(r.get("startTime")), _clock(r.get("endTime"))
+        if period is None or start is None or end is None:
+            continue
+        if end <= start:
+            # some rows carry a duration but a blank or wrapped end time
+            dur = _clock(r.get("duration"))
+            if not dur:
+                continue
+            end = start + dur
+        end = min(end, 1200)
+        if not (1 <= int(period) <= 12) or end <= start:
+            continue
+        key = (r["teamId"], r["playerId"], int(period), start, end)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((game_id, *key))
+    return out

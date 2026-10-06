@@ -4,6 +4,7 @@ Layout:
   games/<season>.csv.gz     one row per finished game
   events/<season>.csv.gz    every play-by-play event
   rosters/<season>.csv.gz   who dressed for each game
+  shifts/<season>.csv.gz    every shift: who was on the ice, and when
   official/<kind>_<season>_<type>.json   league season totals (TOI, GP ...)
   model/                    the trained expected-goals model and its report
   manifest.json             bookkeeping
@@ -16,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .parse import EVENT_COLS, GAME_COLS, ROSTER_COLS
+from .parse import EVENT_COLS, GAME_COLS, ROSTER_COLS, SHIFT_COLS
 
 INT_COLS = {
     "games": ["game_id", "season", "game_type", "home_id", "away_id",
@@ -27,14 +28,17 @@ INT_COLS = {
                "home_skaters", "away_skaters", "home_goalie_in",
                "away_goalie_in", "home_score", "away_score", "penalty_minutes"],
     "rosters": ["game_id", "team_id", "player_id", "sweater"],
+    "shifts": ["game_id", "team_id", "player_id", "period", "start", "end"],
 }
 STR_COLS = {
     "games": ["date", "start_utc", "state", "home_abbrev", "away_abbrev", "last_period_type"],
     "events": ["period_type", "type", "zone", "shot_type", "reason", "situation",
                "penalty_type", "desc_key"],
     "rosters": ["first_name", "last_name", "position"],
+    "shifts": [],
 }
-COLS = {"games": GAME_COLS, "events": EVENT_COLS, "rosters": ROSTER_COLS}
+COLS = {"games": GAME_COLS, "events": EVENT_COLS, "rosters": ROSTER_COLS,
+        "shifts": SHIFT_COLS}
 
 
 def _path(data: Path, table: str, season: int) -> Path:

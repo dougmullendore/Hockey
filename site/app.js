@@ -1,4 +1,4 @@
-/* The Slot: a small single-page site. No build step, no libraries.
+/* GOAT Hockey: a small single-page site. No build step, no libraries.
    Pages: #/ (home), #/games, #/goalies, #/skaters, #/teams, #/about        */
 (function () {
   "use strict";

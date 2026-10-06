@@ -48,5 +48,5 @@ API_STATS = "https://api.nhle.com/stats/rest/en"
 # Rink geometry (feet). The goal line is 89 ft from centre ice.
 GOAL_X = 89.0
 
-SITE_NAME = "The Slot"
+SITE_NAME = "GOAT Hockey"
 SITE_TAGLINE = "NHL expected goals, goalie and team analytics"

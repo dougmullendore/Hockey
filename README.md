@@ -1,4 +1,4 @@
-# The Slot
+# GOAT Hockey
 
 An advanced NHL stats website. Every night it downloads the league's public
 play-by-play data, rates every shot with an expected-goals model, and rebuilds

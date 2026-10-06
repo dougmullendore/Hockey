@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import config, nhl_api, store
-from .parse import is_final, parse_game
+from .parse import is_final, parse_game, parse_shifts
 
 CHUNK = 350  # games per checkpoint
 
@@ -135,6 +135,58 @@ def update_season(data: Path, season: int, dates, manifest: dict, today: dt.date
             "failed": len(failed), "complete": info["complete"]}
 
 
+def update_shifts(data: Path, season: int, manifest: dict, today: dt.date,
+                  deadline: float, log) -> dict:
+    """Download shift charts for stored games that do not have them yet.
+
+    The league sometimes publishes a game's shift chart late, or not at all.
+    Games that come back empty are remembered and retried for two weeks."""
+    info = manifest.setdefault(str(season), {})
+    if info.get("shifts_done") and info.get("complete"):
+        return {"season": season, "shifts": "complete"}
+    games = store.read(data, "games", season)
+    if not len(games):
+        return {"season": season, "shifts": "no games"}
+    shifts = store.read(data, "shifts", season)
+    have = set(shifts["game_id"].dropna().astype(int).unique())
+    empty = set(info.get("shifts_empty", []))
+    date_of = dict(zip(games["game_id"].astype(int), games["date"].astype(str)))
+    recheck = (today - dt.timedelta(days=config.REFRESH_DAYS)).isoformat()
+    retry = (today - dt.timedelta(days=14)).isoformat()
+    need = sorted(g for g, d in date_of.items()
+                  if (g not in have and (g not in empty or d >= retry)) or d >= recheck)
+    done, timed_out = 0, False
+    for i in range(0, len(need), CHUNK):
+        if time.time() > deadline:
+            timed_out = True
+            log(f"season {season}: out of time for shifts after {done} games")
+            break
+        chunk = need[i:i + CHUNK]
+        rows, got = [], set()
+        for gid, raw, err in nhl_api.get_many({g: nhl_api.shifts_url(g) for g in chunk}):
+            if err is not None:
+                log(f"  shifts {gid}: download failed: {err!r}")
+                continue
+            parsed = parse_shifts(raw, gid)
+            if len(parsed) < 200:  # a real game has 600+ shifts
+                empty.add(gid)
+                continue
+            empty.discard(gid)
+            rows.extend(parsed); got.add(gid)
+        shifts = _merge(shifts, "shifts", rows, got,
+                        ["game_id", "period", "team_id", "player_id", "start"])
+        store.write(data, "shifts", season, shifts)
+        done += len(got)
+        log(f"  season {season}: shifts for {done}/{len(need)} games, {len(shifts):,} shifts stored")
+    have = set(shifts["game_id"].dropna().astype(int).unique())
+    missing = sorted(g for g in date_of if g not in have)
+    info["shifts_empty"] = sorted(g for g in empty if g in date_of and g not in have)
+    info["shift_games"] = len(have)
+    info["shifts_done"] = bool(not timed_out and all(g in empty for g in missing))
+    return {"season": season, "shift_games": len(have), "downloaded": done,
+            "missing": len(missing)}
+
+
 def update_official(data: Path, manifest: dict, log) -> None:
     """League-published season totals (ice time, games played, wins ...)."""
     for season in config.SEASONS:
@@ -166,6 +218,11 @@ def update_all(data: Path, log, max_minutes: float = 150) -> list[dict]:
         except Exception as e:
             log(f"season {season}: update failed: {e!r}")
             results.append({"season": season, "error": repr(e)})
+        try:
+            results.append(update_shifts(data, season, manifest, today, deadline, log))
+        except Exception as e:
+            log(f"season {season}: shift update failed: {e!r}")
+            results.append({"season": season, "shift_error": repr(e)})
         store.write_json(data / "manifest.json", manifest)
     update_official(data, manifest, log)
     return results
