@@ -19,6 +19,9 @@ from . import config, nhl_api, store
 
 MAX_POSTS = 6
 TEASER_CHARS = 170
+# say plainly what we are: a feed reader for this one site
+FEED_HEADERS = {"User-Agent": "GOATHockey-FeedReader/1.0 (+https://github.com/dougmullendore/Hockey)",
+                "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.5"}
 
 
 def _plain(text: str | None) -> str:
@@ -66,7 +69,7 @@ def build(out: Path, log=print) -> dict:
     doc.update({"name": name, "url": home})
     doc.setdefault("posts", [])
     try:
-        fresh = parse(nhl_api.get_text(home + "/feed", retries=3), home)
+        fresh = parse(nhl_api.get_text(home + "/feed", retries=3, headers=FEED_HEADERS), home)
         doc.update(fresh)
         doc["fetched_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="minutes")
         result = {"posts": len(fresh["posts"]), "newest": fresh["posts"][0]["date"] if fresh["posts"] else None}

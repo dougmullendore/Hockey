@@ -308,10 +308,10 @@ def test_newsletter_feed_is_read_and_survives_an_outage(monkeypatch):
     assert got["description"] == "Dallas Stars & more"
 
     out = Path(tempfile.mkdtemp(prefix="news"))
-    monkeypatch.setattr(newsletter.nhl_api, "get_text", lambda url, retries=None: feed)
+    monkeypatch.setattr(newsletter.nhl_api, "get_text", lambda url, retries=None, headers=None: feed)
     assert newsletter.build(out, log=lambda m: None)["posts"] == 2
 
-    def down(url, retries=None):
+    def down(url, retries=None, headers=None):
         raise newsletter.nhl_api.FetchError("403")
     monkeypatch.setattr(newsletter.nhl_api, "get_text", down)
     result = newsletter.build(out, log=lambda m: None)                 # outage: keep what we had

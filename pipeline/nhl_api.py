@@ -15,13 +15,13 @@ class FetchError(RuntimeError):
     pass
 
 
-def get_bytes(url: str, retries: int | None = None, timeout: int = 60) -> bytes:
+def get_bytes(url: str, retries: int | None = None, timeout: int = 60, headers: dict | None = None) -> bytes:
     """Download one URL, retrying on transient errors."""
     retries = config.FETCH_RETRIES if retries is None else retries
     last = None
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
+            req = urllib.request.Request(url, headers=headers or {"User-Agent": config.USER_AGENT})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read()
         except urllib.error.HTTPError as e:
@@ -49,8 +49,8 @@ def get_json(url: str, retries: int | None = None, timeout: int = 60):
     raise FetchError(f"bad JSON from {url}: {last!r}")
 
 
-def get_text(url: str, retries: int | None = None) -> str:
-    return get_bytes(url, retries).decode("utf-8", errors="replace")
+def get_text(url: str, retries: int | None = None, headers: dict | None = None) -> str:
+    return get_bytes(url, retries, headers=headers).decode("utf-8", errors="replace")
 
 
 def get_many(urls: dict, threads: int | None = None, text: bool = False):

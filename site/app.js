@@ -804,8 +804,14 @@
     main.appendChild(news);
     load("newsletter").then(function (n) {
       var posts = (n.posts || []).filter(function (p) { return safeUrl(p.link); }).slice(0, 5);
-      if (!posts.length || !safeUrl(n.url)) return;
+      if (!safeUrl(n.url)) return;
       news.hidden = false;
+      if (!posts.length) {      // the feed could not be read: still point readers to the newsletter
+        news.appendChild(el("h2", { text: n.name }));
+        news.appendChild(el("p", { "class": "lede", style: "font-size:1rem", text: n.description || "Hockey writing from the person behind this site." }));
+        news.appendChild(el("p", {}, [el("a", { href: n.url, target: "_blank", rel: "noopener", text: "Read and subscribe at " + n.name })]));
+        return;
+      }
       news.appendChild(el("h2", { text: "Latest from " + n.name }));
       news.appendChild(el("ul", {}, posts.map(function (p) {
         return el("li", {}, [el("time", { datetime: p.date, text: niceDate(p.date) }),
