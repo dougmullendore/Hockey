@@ -19,7 +19,7 @@ FIX = Path(__file__).parent / "fixtures"
 
 def load_all():
     out = []
-    for f in sorted(glob.glob(str(FIX / "*.json.gz"))):
+    for f in sorted(glob.glob(str(FIX / "pbp_*.json.gz"))):
         out.append(parse_game(json.load(gzip.open(f))))
     return out
 

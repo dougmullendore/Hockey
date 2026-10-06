@@ -7,6 +7,8 @@ Every game becomes:
 """
 from __future__ import annotations
 
+import re
+
 GAME_COLS = [
     "game_id", "season", "game_type", "date", "start_utc", "state",
     "home_id", "home_abbrev", "away_id", "away_abbrev",
@@ -209,4 +211,40 @@ def parse_shifts(raw: dict, game_id: int) -> list[tuple]:
             continue
         seen.add(key)
         out.append((game_id, *key))
+    return out
+
+
+_REPORT_PLAYER = re.compile(r'class="playerHeading[^"]*"[^>]*>\s*(\d+)\s+([^<]*)<')
+_REPORT_ROW = re.compile(
+    r"<td[^>]*>\s*\d+\s*</td>\s*"                      # shift number
+    r"<td[^>]*>\s*(\d+|OT)\s*</td>\s*"                 # period
+    r"<td[^>]*>\s*(\d+:\d+)\s*/[^<]*</td>\s*"          # start (elapsed)
+    r"<td[^>]*>\s*(\d+:\d+)\s*/[^<]*</td>", re.I)      # end (elapsed)
+
+
+def parse_shift_report(html: str, game_id: int, team_id: int, by_sweater: dict) -> list[tuple]:
+    """Read one team's shifts from the league's printable ice-time report.
+
+    This is the fallback for games whose shift chart feed is empty. The
+    report lists players by sweater number, so `by_sweater` maps the number
+    to a player id for this team in this game."""
+    out, seen = [], set()
+    heads = list(_REPORT_PLAYER.finditer(html))
+    for i, h in enumerate(heads):
+        pid = by_sweater.get(int(h.group(1)))
+        if pid is None:
+            continue
+        block = html[h.end(): heads[i + 1].start() if i + 1 < len(heads) else len(html)]
+        for per, a, b in _REPORT_ROW.findall(block):
+            period = 4 if per.upper() == "OT" else int(per)
+            start, end = _clock(a), _clock(b)
+            if start is None or end is None:
+                continue
+            end = min(end, 1200)
+            if end <= start or not (1 <= period <= 12):
+                continue
+            key = (team_id, pid, period, start, end)
+            if key not in seen:
+                seen.add(key)
+                out.append((game_id, *key))
     return out

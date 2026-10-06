@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import config, nhl_api, store
-from .parse import is_final, parse_game, parse_shifts
+from .parse import is_final, parse_game, parse_shift_report, parse_shifts
 
 CHUNK = 350  # games per checkpoint
 
@@ -135,6 +135,33 @@ def update_season(data: Path, season: int, dates, manifest: dict, today: dt.date
             "failed": len(failed), "complete": info["complete"]}
 
 
+MIN_SHIFTS = 200  # a real game has 600 or more
+
+
+def _shifts_from_reports(data: Path, season: int, games, game_ids: list, log) -> dict:
+    """Fallback: read shifts for these games from the printable reports."""
+    if not game_ids:
+        return {}
+    rosters = store.read(data, "rosters", season)
+    rosters = rosters[rosters["game_id"].isin(game_ids) & rosters["sweater"].notna()]
+    home_of = dict(zip(games["game_id"].astype(int), games["home_id"].astype(int)))
+    away_of = dict(zip(games["game_id"].astype(int), games["away_id"].astype(int)))
+    urls = {}
+    for g in game_ids:
+        urls[(g, True)] = nhl_api.shift_report_url(g, season, True)
+        urls[(g, False)] = nhl_api.shift_report_url(g, season, False)
+    out = {g: [] for g in game_ids}
+    for (g, is_home), html, err in nhl_api.get_many(urls, text=True):
+        if err is not None:
+            log(f"  shift report {g}: {err!r}")
+            continue
+        team = home_of[g] if is_home else away_of[g]
+        r = rosters[(rosters["game_id"] == g) & (rosters["team_id"] == team)]
+        by_sweater = dict(zip(r["sweater"].astype(int), r["player_id"].astype(int)))
+        out[g].extend(parse_shift_report(html, g, team, by_sweater))
+    return out
+
+
 def update_shifts(data: Path, season: int, manifest: dict, today: dt.date,
                   deadline: float, log) -> dict:
     """Download shift charts for stored games that do not have them yet.
@@ -142,7 +169,7 @@ def update_shifts(data: Path, season: int, manifest: dict, today: dt.date,
     The league sometimes publishes a game's shift chart late, or not at all.
     Games that come back empty are remembered and retried for two weeks."""
     info = manifest.setdefault(str(season), {})
-    if info.get("shifts_done") and info.get("complete"):
+    if info.get("shifts_done") and info.get("complete") and not info.get("shifts_empty"):
         return {"season": season, "shifts": "complete"}
     games = store.read(data, "games", season)
     if not len(games):
@@ -153,26 +180,34 @@ def update_shifts(data: Path, season: int, manifest: dict, today: dt.date,
     date_of = dict(zip(games["game_id"].astype(int), games["date"].astype(str)))
     recheck = (today - dt.timedelta(days=config.REFRESH_DAYS)).isoformat()
     retry = (today - dt.timedelta(days=14)).isoformat()
+    tried = set(info.get("shifts_report_tried", []))
     need = sorted(g for g, d in date_of.items()
-                  if (g not in have and (g not in empty or d >= retry)) or d >= recheck)
-    done, timed_out = 0, False
+                  if (g not in have and (g not in empty or d >= retry or g not in tried))
+                  or d >= recheck)
+    done, timed_out, from_reports = 0, False, 0
     for i in range(0, len(need), CHUNK):
         if time.time() > deadline:
             timed_out = True
             log(f"season {season}: out of time for shifts after {done} games")
             break
         chunk = need[i:i + CHUNK]
-        rows, got = [], set()
+        rows, got, blank = [], set(), []
         for gid, raw, err in nhl_api.get_many({g: nhl_api.shifts_url(g) for g in chunk}):
             if err is not None:
                 log(f"  shifts {gid}: download failed: {err!r}")
                 continue
             parsed = parse_shifts(raw, gid)
-            if len(parsed) < 200:  # a real game has 600+ shifts
+            if len(parsed) < MIN_SHIFTS:
+                blank.append(gid)
+                continue
+            rows.extend(parsed); got.add(gid)
+        # the feed is empty for some games; the printable reports are not
+        for gid, parsed in _shifts_from_reports(data, season, games, blank, log).items():
+            if len(parsed) < MIN_SHIFTS:
                 empty.add(gid)
                 continue
-            empty.discard(gid)
-            rows.extend(parsed); got.add(gid)
+            rows.extend(parsed); got.add(gid); from_reports += 1
+        empty -= got
         shifts = _merge(shifts, "shifts", rows, got,
                         ["game_id", "period", "team_id", "player_id", "start"])
         store.write(data, "shifts", season, shifts)
@@ -181,10 +216,11 @@ def update_shifts(data: Path, season: int, manifest: dict, today: dt.date,
     have = set(shifts["game_id"].dropna().astype(int).unique())
     missing = sorted(g for g in date_of if g not in have)
     info["shifts_empty"] = sorted(g for g in empty if g in date_of and g not in have)
+    info["shifts_report_tried"] = info["shifts_empty"]
     info["shift_games"] = len(have)
     info["shifts_done"] = bool(not timed_out and all(g in empty for g in missing))
     return {"season": season, "shift_games": len(have), "downloaded": done,
-            "missing": len(missing)}
+            "from_reports": from_reports, "missing": len(missing)}
 
 
 def update_official(data: Path, manifest: dict, log) -> None:
