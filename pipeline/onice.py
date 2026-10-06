@@ -36,8 +36,74 @@ def _weights(ev: pd.DataFrame) -> np.ndarray:
     ])
 
 
-def _game(game, sh: pd.DataFrame, ro: pd.DataFrame, ev: pd.DataFrame):
-    """On-ice sums for one game. Returns (players, combos, pairs, teams, checks)."""
+STINT_COLS = ["game_id", "start", "dur", "state", "h1", "h2", "h3", "h4", "h5",
+              "a1", "a2", "a3", "a4", "a5", "hxg", "axg", "hgoals", "agoals", "score", "fo"]
+# stint states
+EV, HOME_PP, AWAY_PP = 1, 2, 3
+
+
+def _first_five(rows: np.ndarray, ids: np.ndarray) -> np.ndarray:
+    """Player ids of up to five skaters on the ice in each row (0 = empty)."""
+    if rows.shape[1] < 5:
+        rows = np.pad(rows, ((0, 0), (0, 5 - rows.shape[1])))
+        ids = np.pad(ids, (0, 5 - len(ids)))
+    order = np.argsort(~rows, axis=1, kind="stable")[:, :5]
+    picked = ids[order]
+    picked[~np.take_along_axis(rows, order, axis=1)] = 0
+    return picked
+
+
+def _stints(gid, on, T, pid, is_home, skater, state, idx_all, ev_all, home_id, fo):
+    """Cut the game into stretches where the same players are on the ice.
+
+    A new stint starts at every line change, every faceoff and every period.
+    Each one records who was out, how long it lasted, the expected goals each
+    way, the score when it began and where the opening faceoff was."""
+    change = np.zeros(T, dtype=bool)
+    change[0] = True
+    change[1:] = (on[1:] != on[:-1]).any(axis=1)
+    change[::1200] = True
+    fo_zone = np.full(T, 9, dtype=np.int8)        # 9 = started on the fly
+    if fo is not None and len(fo):
+        t = (fo["period"].to_numpy("int64") - 1) * 1200 + fo["period_seconds"].to_numpy("int64")
+        z = fo["zone"].map({"O": 1, "N": 0, "D": -1}).fillna(0).to_numpy("int64")
+        z = np.where(fo["team_id"].to_numpy("int64") == home_id, z, -z)   # as the home team sees it
+        ok = (t >= 0) & (t < T)
+        change[t[ok]] = True
+        fo_zone[t[ok]] = z[ok]
+    starts = np.flatnonzero(change)
+    dur = np.diff(np.r_[starts, T])
+
+    seg = np.searchsorted(starts, idx_all, side="right") - 1
+    home_ev = ev_all["team_id"].to_numpy("int64") == home_id
+    xg = ev_all["xg"].fillna(0.0).to_numpy(float)
+    goal = (ev_all["type"].to_numpy() == "goal").astype(float)
+    n = len(starts)
+    hxg = np.bincount(seg[home_ev], weights=xg[home_ev], minlength=n)
+    axg = np.bincount(seg[~home_ev], weights=xg[~home_ev], minlength=n)
+    hgl = np.bincount(seg[home_ev], weights=goal[home_ev], minlength=n)
+    agl = np.bincount(seg[~home_ev], weights=goal[~home_ev], minlength=n)
+    h_goal_t = np.sort(idx_all[home_ev & (goal == 1)])
+    a_goal_t = np.sort(idx_all[~home_ev & (goal == 1)])
+    score = np.searchsorted(h_goal_t, starts, "left") - np.searchsorted(a_goal_t, starts, "left")
+
+    keep = state[starts] > 0
+    s = starts[keep]
+    rows = on[s]
+    hcols, acols = np.flatnonzero(is_home & skater), np.flatnonzero(~is_home & skater)
+    out = np.column_stack([
+        np.full(len(s), gid), s, dur[keep], state[s],
+        _first_five(rows[:, hcols], pid[hcols]), _first_five(rows[:, acols], pid[acols]),
+    ]).astype("int64")
+    frame = pd.DataFrame(out, columns=STINT_COLS[:14])
+    frame["hxg"], frame["axg"] = hxg[keep], axg[keep]
+    frame["hgoals"], frame["agoals"] = hgl[keep], agl[keep]
+    frame["score"], frame["fo"] = score[keep], fo_zone[s]
+    return frame
+
+
+def _game(game, sh: pd.DataFrame, ro: pd.DataFrame, ev: pd.DataFrame, fo=None):
+    """On-ice sums for one game. Returns (players, combos, pairs, teams, checks, stints)."""
     gid, home_id, away_id = int(game.game_id), int(game.home_id), int(game.away_id)
     pid = ro["player_id"].to_numpy("int64")
     team = ro["team_id"].to_numpy("int64")
@@ -65,6 +131,11 @@ def _game(game, sh: pd.DataFrame, ro: pd.DataFrame, ev: pd.DataFrame):
     hg = on[:, is_home & goalie].sum(1)
     ag = on[:, ~is_home & goalie].sum(1)
     five = (hs == 5) & (as_ == 5) & (hg == 1) & (ag == 1)
+    both_goalies = (hg == 1) & (ag == 1)
+    state = np.zeros(T, dtype=np.int8)
+    state[five] = EV
+    state[both_goalies & (hs > as_) & (hs <= 5) & (as_ >= 3)] = HOME_PP
+    state[both_goalies & (as_ > hs) & (as_ <= 5) & (hs >= 3)] = AWAY_PP
 
     # ---- shot attempts, placed on the second just before they happened ----
     per = ev["period"].to_numpy("int64")
@@ -73,6 +144,8 @@ def _game(game, sh: pd.DataFrame, ro: pd.DataFrame, ev: pd.DataFrame):
     ok = (per <= max_period) & (idx < T)
     ev, idx = ev[ok], idx[ok]
     all_goals = int((ev["type"] == "goal").sum())
+    skater = pos != "G"
+    stints = _stints(gid, on, T, pid, is_home, skater, state, idx, ev, home_id, fo)
     keep = five[idx]
     ev, idx = ev[keep], idx[keep]
     w = _weights(ev)                       # events x 5
@@ -88,9 +161,13 @@ def _game(game, sh: pd.DataFrame, ro: pd.DataFrame, ev: pd.DataFrame):
     toi5 = on5.sum(0)
     skater = ~goalie
     played = toi_all > 0
+    home_pp, away_pp = on[state == HOME_PP].sum(0), on[state == AWAY_PP].sum(0)
+    toi_pp = np.where(is_home, home_pp, away_pp)
+    toi_sh = np.where(is_home, away_pp, home_pp)
     players = pd.DataFrame({
         "game_id": gid, "team_id": team[played & skater], "player_id": pid[played & skater],
         "toi_all": toi_all[played & skater], "toi5": toi5[played & skater],
+        "toi_pp": toi_pp[played & skater], "toi_sh": toi_sh[played & skater],
     })
     for j, k in enumerate(STATS):
         players[k + "f"] = p_for[played & skater, j]
@@ -164,7 +241,7 @@ def _game(game, sh: pd.DataFrame, ro: pd.DataFrame, ev: pd.DataFrame):
         "skaters_on_for_goal": float((E[goals5][:, skater].sum(1)).mean()) if goals5.any() else np.nan,
         "odd_seconds": int(((hs > 6) | (as_ > 6) | (hg > 1) | (ag > 1)).sum()),
     }
-    return players, combos, pairs, teams, checks
+    return players, combos, pairs, teams, checks, stints
 
 
 def build(games: pd.DataFrame, events: pd.DataFrame, rosters: pd.DataFrame,
@@ -176,10 +253,13 @@ def build(games: pd.DataFrame, events: pd.DataFrame, rosters: pd.DataFrame,
         shots[["game_id", "idx", "xg", "strength"]], on=["game_id", "idx"], how="left")
     # a penalty shot is not a five-on-five event even if the clock says so
     att = att[att["strength"].fillna("") != "PS"]
+    fo = events[(events["type"] == "faceoff") & events["team_id"].notna() & events["period_seconds"].notna()]
+    fo = fo[["game_id", "period", "period_seconds", "team_id", "zone"]]
     by_game = {"sh": dict(tuple(shifts.groupby("game_id"))),
                "ro": dict(tuple(rosters.groupby("game_id"))),
-               "ev": dict(tuple(att.groupby("game_id")))}
-    out = {"players": [], "combos": [], "pairs": [], "teams": [], "checks": []}
+               "ev": dict(tuple(att.groupby("game_id"))),
+               "fo": dict(tuple(fo.groupby("game_id")))}
+    out = {"players": [], "combos": [], "pairs": [], "teams": [], "checks": [], "stints": []}
     skipped = 0
     for game in games.itertuples(index=False):
         gid = int(game.game_id)
@@ -188,16 +268,18 @@ def build(games: pd.DataFrame, events: pd.DataFrame, rosters: pd.DataFrame,
             skipped += 1
             continue
         try:
-            p, c, w, t, chk = _game(game, sh, ro, ev)
+            p, c, w, t, chk, st = _game(game, sh, ro, ev, by_game["fo"].get(gid))
         except Exception as e:  # one broken game must not sink the season
             skipped += 1
             if log:
                 log(f"on-ice: game {gid} skipped: {e!r}")
             continue
         out["players"].append(p); out["combos"].append(c); out["pairs"].append(w)
-        out["teams"].append(t); out["checks"].append(chk)
+        out["teams"].append(t); out["checks"].append(chk); out["stints"].append(st)
     empty = {
-        "players": ["game_id", "team_id", "player_id", "toi_all", "toi5", *FOR, *AGAINST],
+        "players": ["game_id", "team_id", "player_id", "toi_all", "toi5", "toi_pp", "toi_sh",
+                    *FOR, *AGAINST],
+        "stints": STINT_COLS,
         "combos": ["game_id", "team_id", "kind", "key", "toi5", *FOR, *AGAINST],
         "pairs": ["game_id", "team_id", "p1", "p2", "toi5", *FOR, *AGAINST],
         "teams": ["game_id", "team_id", "toi5", *FOR, *AGAINST],

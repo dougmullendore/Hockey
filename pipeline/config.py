@@ -30,6 +30,17 @@ XG_SEASON_DECAY = 0.5
 # is how many expected goals of "benefit of the doubt" last season gets.
 XG_SCALE_PRIOR = 1500.0
 
+# --- WAR ---------------------------------------------------------------
+# Pull toward the prior, in hours of ice time (chosen by cross-validation).
+WAR_LAMBDA_EV = 20.0
+WAR_LAMBDA_PP = 5.0
+# A skater's rating starts each season at this fraction of last season's.
+WAR_PRIOR_FADE = 0.7
+# Finishing credit: goals above expected are multiplied by xG / (xG + K).
+WAR_FINISHING_K = 20.0
+# Fallback until there is a full season to measure it from.
+WAR_GOALS_PER_WIN = 6.0
+
 # Game types: 2 = regular season, 3 = playoffs.
 GAME_TYPES = {2: "regular", 3: "playoffs"}
 

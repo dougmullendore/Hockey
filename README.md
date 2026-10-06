@@ -12,6 +12,7 @@ You do not need to run anything. GitHub does it all on a schedule.
 | --- | --- |
 | Home | A shot map for each recent game, plus season leaders |
 | Games | Every game: the score next to the expected goals |
+| WAR | Wins above replacement for every skater and goalie, split into its parts |
 | Goalies | Goals saved above expected, overall and on high-danger shots |
 | Skaters | Goals, assists, individual expected goals, finishing; plus on-ice results at five-on-five |
 | Lines | Forward lines, defense pairs, and how any two teammates do with and without each other |
@@ -67,6 +68,7 @@ A minute later the site is live at
 | `pipeline/fetch.py`, `parse.py` | Downloading games and tidying them |
 | `pipeline/features.py`, `xg.py` | The expected-goals model |
 | `pipeline/onice.py` | Who was on the ice for every shot (from shift charts) |
+| `pipeline/rapm.py`, `war.py` | Isolating each player's impact, and wins above replacement |
 | `pipeline/aggregate.py` | The tables shown on the site |
 | `site/` | The web pages (HTML, CSS, JavaScript) |
 | `tests/` | Checks run against four real games |

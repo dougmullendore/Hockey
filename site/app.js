@@ -123,6 +123,23 @@
       ["finish", "Finishing", "Goals scored minus expected goals: how much the shooters beat the chances", F.s1, { grp: 1, sign: 1 }],
       ["goaltending", "Goaltending", "Goals saved above expected by the team's goalies", F.s1, { sign: 1 }]
     ],
+    war: [
+      ["name", "Player", "", F.txt, { name: 1 }],
+      ["team", "Team", "Most recent team first", F.txt, { left: 1 }],
+      ["pos", "Pos", "Forward, defenseman or goalie", F.txt, { left: 1 }],
+      ["gp", "GP", "Games played", F.int],
+      ["toi", "TOI", "Minutes played, all situations", F.int],
+      ["war", "WAR", "Wins above replacement: the extra wins he gave his team compared with a fill-in player in the same ice time", F.d2, { grp: 1, bar: 1 }],
+      ["war82", "WAR/82", "WAR at this pace over an 82-game season (skaters only)", F.d2, { sign: 1 }],
+      ["ev_off", "EV Off", "Wins from his effect on his team's chances at five-on-five, with linemates, opponents, score and shift starts accounted for", F.d2, { grp: 1, sign: 1 }],
+      ["ev_def", "EV Def", "Wins from his effect on the opponent's chances at five-on-five. Positive means he suppresses chances", F.d2, { sign: 1 }],
+      ["pp", "PP", "Wins from his effect on his team's power-play chances", F.d2, { sign: 1 }],
+      ["pk", "PK", "Wins from his effect on opposing power-play chances while killing penalties", F.d2, { sign: 1 }],
+      ["fin", "Finishing", "Wins from scoring more goals than his shots were worth. Only part of the gap is credited, because one season of finishing is mostly luck", F.d2, { sign: 1 }],
+      ["pen", "Penalties", "Wins from drawing more penalties than he takes", F.d2, { sign: 1 }],
+      ["goalie", "Goaltending", "Goalies only: wins from goals saved above expected", F.d2, { grp: 1, sign: 1 }],
+      ["gar", "GAR", "Goals above replacement: WAR before goals are converted to wins", F.d1, { sign: 1 }]
+    ],
     onice: [
       ["name", "Skater", "", F.txt, { name: 1 }],
       ["team", "Team", "Most recent team first", F.txt, { left: 1 }],
@@ -177,6 +194,8 @@
   var SKATER_TABS = [["skaters", "Individual"], ["onice", "On-ice at 5v5"]];
   var LINE_TABS = [["lines", "Forward lines"], ["pairs", "Defense pairs"], ["wowy", "With or without"]];
   var PAGES = {
+    war: { title: "Wins above replacement", sort: "war", regularOnly: 1, lede: "One number for a player's total contribution: how many more wins he was worth than a fill-in would have been. Regular season only.",
+      min: { key: "gp", label: "Minimum games played", steps: [0, 5, 10, 20, 40, 60], share: 0.12 }, search: "name", pos: "all", noun: "players" },
     onice: { title: "Skaters", nav: "skaters", tabs: SKATER_TABS, sort: "xg_pct", lede: "What happens at five-on-five while each skater is on the ice, and how that compares with the same team when he sits.",
       min: { key: "toi", label: "Minimum 5v5 minutes", steps: [0, 10, 25, 50, 100, 200, 400, 600, 800], share: 0.5 }, search: "name", pos: 1, noun: "skaters" },
     lines: { title: "Lines and pairs", nav: "lines", tabs: LINE_TABS, sort: "toi", lede: "Forward trios at five-on-five: how much they play together and who gets the better of the chances when they do.",
@@ -192,7 +211,7 @@
   };
 
   // -------------------------------------------------------------- pages --
-  function seasonControls(onChange) {
+  function seasonControls(onChange, regularOnly) {
     var sel = el("select", { id: "f-season", onchange: function () { state.season = +sel.value; fixType(); onChange(); } },
       meta.seasons.map(function (s) { return el("option", { value: s.id, text: s.label, selected: s.id === state.season }); }));
     var seg = el("div", { "class": "seg", role: "group", "aria-label": "Game type" }, ["regular", "playoffs"].map(function (t) {
@@ -200,7 +219,7 @@
       return el("button", { type: "button", "aria-pressed": String(state.type === t), disabled: !has,
         text: t === "regular" ? "Regular season" : "Playoffs", onclick: function () { state.type = t; onChange(); } });
     }));
-    return [el("label", { "class": "field" }, ["Season", sel]), seg];
+    return regularOnly ? [el("label", { "class": "field" }, ["Season", sel])] : [el("label", { "class": "field" }, ["Season", sel]), seg];
   }
   function fixType() { if (!typeInfo(state.season, state.type)) state.type = "regular"; }
 
@@ -223,10 +242,11 @@
     main.appendChild(controls); main.appendChild(holder);
     function rerender() { tablePage(kind); }
 
-    seasonControls(function () { st.min = null; rerender(); }).forEach(function (c) { controls.appendChild(c); });
+    seasonControls(function () { st.min = null; rerender(); }, page.regularOnly).forEach(function (c) { controls.appendChild(c); });
+    var gameType = page.regularOnly ? "regular" : state.type;
     holder.appendChild(el("p", { "class": "loading", text: "Loading…" }));
 
-    load(kind + "_" + state.season + "_" + state.type).then(function (rows) {
+    load(kind + "_" + state.season + "_" + gameType).then(function (rows) {
       if (kind === "games") rows.forEach(function (r) { r.xgd = Math.round((r.hxg - r.axg) * 100) / 100; r._teams = r.home + " " + r.away; });
       if (page.min) {
         var top = Math.max.apply(null, rows.map(function (r) { return r[page.min.key] || 0; }).concat([0]));
@@ -240,7 +260,8 @@
       }
       if (page.pos) {
         var psel = el("select", { onchange: function () { st.pos = psel.value; draw(); } },
-          [["", "All skaters"], ["F", "Forwards"], ["D", "Defensemen"]].map(function (o) { return el("option", { value: o[0], text: o[1], selected: o[0] === st.pos }); }));
+          (page.pos === "all" ? [["", "Everyone"], ["S", "Skaters"], ["F", "Forwards"], ["D", "Defensemen"], ["G", "Goalies"]]
+            : [["", "All skaters"], ["F", "Forwards"], ["D", "Defensemen"]]).map(function (o) { return el("option", { value: o[0], text: o[1], selected: o[0] === st.pos }); }));
         controls.appendChild(el("label", { "class": "field" }, ["Position", psel]));
       }
       if (page.search) {
@@ -251,7 +272,7 @@
         var needle = st.q.trim().toLowerCase();
         var shown = rows.filter(function (r) {
           if (page.min && (r[page.min.key] || 0) < st.min) return false;
-          if (page.pos && st.pos && r.pos !== st.pos) return false;
+          if (page.pos && st.pos && (st.pos === "S" ? r.pos === "G" : r.pos !== st.pos)) return false;
           if (needle && String(r[page.search] || "").toLowerCase().indexOf(needle) < 0 && String(r.team || "").toLowerCase().indexOf(needle) < 0) return false;
           return true;
         });
@@ -261,7 +282,7 @@
           return;
         }
         holder.appendChild(statsTable(cols, shown, st, draw));
-        var ti = typeInfo(state.season, state.type);
+        var ti = typeInfo(state.season, gameType);
         holder.appendChild(el("p", { "class": "note", text: "Showing " + shown.length.toLocaleString("en-US") + " of " + rows.length.toLocaleString("en-US") + " " + page.noun +
           (ti ? ", through " + niceDate(ti.through, true) + " (" + ti.games.toLocaleString("en-US") + " games)" : "") + ". Select a column heading to sort; hover it for what it means." }));
       }
@@ -506,20 +527,22 @@
 
     var latest = meta.seasons[0], lt = latest.types[latest.types.length - 1];
     var sfx = "_" + latest.id + "_" + lt.id;
-    Promise.all([load("goalies" + sfx), load("skaters" + sfx), load("teams" + sfx)]).then(function (d) {
-      function block(title, rows, val, fmt, route, sub) {
+    Promise.all([load("goalies" + sfx), load("war_" + latest.id + "_regular").catch(function () { return []; }), load("teams" + sfx)]).then(function (d) {
+      function block(title, rows, val, fmt, route, sub, linkText) {
         var ol = el("ol", {}, rows.slice(0, 5).map(function (r, i) {
           return el("li", {}, [el("span", { "class": "rk", text: String(i + 1) }),
             el("span", { "class": "who" }, [r.name || r.team, r.name ? el("small", { text: r.team || "" }) : null]),
             el("span", { "class": "val", text: fmt(r[val]) })]);
         }));
         return el("div", {}, [el("h2", { text: title }), el("p", { "class": "note", style: "margin:0 0 8px", text: sub }), ol,
-          el("p", {}, [el("a", { href: "#/" + route, text: "All " + route })])]);
+          el("p", {}, [el("a", { href: "#/" + route, text: linkText || "All " + route })])]);
       }
       var by = function (rows, k) { return rows.slice().sort(function (a, b) { return (b[k] || 0) - (a[k] || 0); }); };
       var when = latest.label + (lt.id === "playoffs" ? " playoffs" : "") + ", through " + niceDate(lt.through);
+      var whenReg = latest.label + ", through " + niceDate((typeInfo(latest.id, "regular") || lt).through);
+      var sk = d[1].filter(function (r) { return r.pos !== "G"; });
+      if (sk.length) leaders.appendChild(block("Wins above replacement, skaters", by(sk, "war"), "war", F.d2, "war", whenReg, "Full WAR table"));
       leaders.appendChild(block("Goals saved above expected", by(d[0], "gsax"), "gsax", F.s1, "goalies", when));
-      leaders.appendChild(block("Expected goals, skaters", by(d[1], "ixg"), "ixg", F.d1, "skaters", when));
       leaders.appendChild(block("Share of expected goals", by(d[2], "xg_pct"), "xg_pct", function (v) { return F.pct(v) + "%"; }, "teams", when));
     }).catch(function () {});
   }
@@ -541,6 +564,11 @@
       "<p class='note'>If the model is honest, shots it rates at 10% go in about 10% of the time. Each point is a tenth of the test shots, grouped from worst chances to best. Points on the dashed line are perfect.</p>" +
       "<h2>What the model cannot see</h2>" +
       "<p>The public feed records where a shot was taken, not what led up to it in detail. The model does not know about screens, passes across the slot, or where the goalie was standing. Shot locations are entered by hand at each arena and differ a little from rink to rink. Treat small differences between players as noise, especially early in a season.</p>" +
+      "<h2>Wins above replacement</h2>" +
+      "<p>WAR rolls a player's whole contribution into one number: the wins he added compared with a replacement player, meaning the kind of fill-in a team can call up or sign for the minimum.</p>" +
+      "<p>For skaters it adds six parts. Four come from a regression that looks at every stretch of play and works out each skater's own effect on chances, with his linemates, opponents, the score and where his shifts started taken into account: five-on-five offense, five-on-five defense, power play and penalty kill. The other two are counted directly: finishing (goals beyond what his shots were worth) and penalties drawn minus taken. Goalies are rated on goals saved above expected.</p>" +
+      "<p id='ab-war'></p>" +
+      "<p>A few choices are worth knowing about. Forwards and defensemen are each rated against their own position. A skater's rating starts each season from a faded copy of last season's and from the typical level for his role on the team, then moves as evidence comes in, so early-season numbers lean on last year. Only part of a hot or cold shooting season is credited, because finishing mostly does not repeat. And the regression cannot fully separate players who are always on the ice together, so it splits their credit.</p>" +
       "<h2>On-ice numbers</h2>" +
       "<p>The league publishes when every player steps on and off the ice. Laid over the shot data, that shows which ten skaters were out for each shot. On-ice numbers, lines, pairs and the with-or-without tables all come from that, and all are at five-on-five: five skaters and a goalie on each side.</p>" +
       "<p id='ab-shifts'></p>" +
@@ -548,7 +576,7 @@
       "<h2>Data</h2><p>Games come from the NHL's public play-by-play feed and are refreshed every night. Games from the last three days are re-checked for the league's stat corrections. Shootouts are left out of every table.</p>";
     var seen = {}, gl = document.getElementById("ab-gloss");
     [["xG", "Expected goals: the chance a shot goes in, added up."]].concat(
-      ["goalies", "skaters", "onice", "teams"].reduce(function (acc, k) { return acc.concat(COLS[k].map(function (c) { return [c[1], c[2]]; })); }, [])
+      ["war", "goalies", "skaters", "onice", "teams"].reduce(function (acc, k) { return acc.concat(COLS[k].map(function (c) { return [c[1], c[2]]; })); }, [])
     ).forEach(function (g) {
       if (!g[1] || seen[g[0]] || /^(GP|W|L|G|P|Team|Pos)$/.test(g[0])) return;
       seen[g[0]] = 1; gl.appendChild(el("dt", { text: g[0] })); gl.appendChild(el("dd", { text: g[1] }));
@@ -559,6 +587,13 @@
     if (total) document.getElementById("ab-shifts").textContent = "Shift records are available for " + have.toLocaleString("en-US") + " of " + total.toLocaleString("en-US") + " games" +
       (gaps.length ? ". The missing games (" + gaps.join(", ") + ") are left out of the on-ice tables." : ".") +
       " Ice time added up from them matches the league's official totals to within half a percent for nearly every skater.";
+    var wm = meta.war || {};
+    if (wm.goals_per_win) {
+      var tc = wm.team_check, done = Object.keys(wm.seasons || {}).sort(), ref = wm.seasons[done[Math.max(0, done.length - 2)]] || {};
+      document.getElementById("ab-war").textContent = "Goals become wins at " + wm.goals_per_win.toFixed(1) + " goals per win, measured from team results. A drawn penalty is worth about " + wm.penalty_value.toFixed(2) + " goals. " +
+        "A full season adds up to roughly " + Math.round(ref.total || 0) + " WAR across the league, about " + Math.round((ref.total || 0) / 32) + " per team." +
+        (tc ? " As a check, adding up each team's player WAR and comparing it with the standings over " + tc.team_seasons + " team-seasons gives a correlation of " + tc.corr.toFixed(2) + ", and a team made only of replacement players would be expected to finish with about " + Math.round(tc.replacement_team_points) + " points." : "");
+    }
     load("model").then(function (m) {
       if (!m || !m.overall) return;
       var o = m.overall, label = String(m.test_season).slice(0, 4) + "-" + String(m.test_season).slice(6);
@@ -604,7 +639,7 @@
       if (a.dataset.route === navKey) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
     if (PAGES[r]) tablePage(r); else if (r === "wowy") wowyPage(); else if (r === "about") about(); else home();
-    document.title = (PAGES[r] ? PAGES[r].title + " | " : r === "wowy" ? "With or without | " : r === "about" ? "About | " : "") + meta.site;
+    document.title = (r === "war" ? "WAR | " : PAGES[r] ? PAGES[r].title + " | " : r === "wowy" ? "With or without | " : r === "about" ? "About | " : "") + meta.site;
     window.scrollTo(0, 0);
   }
 

@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import config, features, onice, store, xg
+from . import config, features, onice, store, war, xg
 
 HIGH_DANGER = 0.15   # a shot worth 15%+ is a high-danger chance
 MED_DANGER = 0.05
@@ -484,6 +484,48 @@ def wowy_table(res: dict, ids: set, names: pd.DataFrame, abbr: dict) -> dict:
     return {"players": players, "totals": totals, "pairs": pairs}
 
 
+def _finish_war(data: Path, out: Path, all_games: dict, manifest: dict, log) -> dict:
+    """Second pass: league-wide settings, then the WAR table for every season."""
+    saved, goalie_rows = {}, {}
+    for season in all_games:
+        s = store.read_json(data / "war" / f"{season}.json")
+        if s and s.get("players"):
+            saved[season] = s
+            goalie_rows[season] = store.read_json(out / f"goalies_{season}_regular.json", []) or []
+    if not saved:
+        return {}
+    complete = {s for s in saved if manifest.get(str(s), {}).get("complete")}
+    gpw = war.goals_per_win({s: all_games[s] for s in complete})
+    final = war.finalize(saved, goalie_rows, gpw, complete)
+    check = []
+    for season, res in final.items():
+        if season in complete:
+            pts = {t["team"]: t["pts"] for t in store.read_json(out / f"teams_{season}_regular.json", []) or []}
+            for team, w in war.team_totals(res["rows"]).items():
+                if team in pts:
+                    check.append((w, pts[team]))
+        rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in res["rows"]]
+        store.write_json(out / f"war_{season}_regular.json", rows, compact=True)
+    notes = final[max(final)]["notes"]
+    meta = {"goals_per_win": gpw, "scale": notes["scale"],
+            "replacement_per60": notes["replacement_per60"],
+            "goalie_replacement_per_100_shots": notes["goalie_replacement_per_100_shots"],
+            "penalty_value": round(float(np.mean([final[s]["notes"]["penalty_value"] or 0.0
+                                                  for s in (complete or final)])), 3),
+            "seasons": {str(s): {"total": r["notes"]["total_war"], "skaters": r["notes"]["skater_war"],
+                                 "goalies": r["notes"]["goalie_war"]} for s, r in final.items()},
+            "settings": {"lambda_ev": config.WAR_LAMBDA_EV, "lambda_pp": config.WAR_LAMBDA_PP,
+                         "fade": config.WAR_PRIOR_FADE, "finishing_k": config.WAR_FINISHING_K}}
+    if len(check) >= 20:
+        w, p = np.array(check, float).T
+        slope, intercept = np.polyfit(w, p, 1)
+        meta["team_check"] = {"team_seasons": len(check), "corr": round(float(np.corrcoef(w, p)[0, 1]), 3),
+                              "points_per_war": round(float(slope), 2),
+                              "replacement_team_points": round(float(intercept), 1)}
+    log(f"WAR: {len(final)} seasons, {gpw} goals per win, team check {meta.get('team_check')}")
+    return meta
+
+
 # -------------------------------------------------------------------- main --
 def build_all(data: Path, log) -> dict:
     data = Path(data)
@@ -500,13 +542,14 @@ def build_all(data: Path, log) -> dict:
 
     seasons_meta, summary = [], {}
     latest = None
+    all_games, war_prior = {}, None
     for season in config.SEASONS:
         games = store.read(data, "games", season)
         if not len(games):
             continue
         info = manifest.get(str(season), {})
         stamp = (f"{config.XG_MODEL_VERSION}|{len(games)}|{games['date'].max()}|"
-                 f"{info.get('shift_games', 0)}|v7|" + ",".join(map(str, model.get("train_seasons", []))))
+                 f"{info.get('shift_games', 0)}|v8|" + ",".join(map(str, model.get("train_seasons", []))))
         types = []
         for gt, gname in config.GAME_TYPES.items():
             n = int((games["game_type"] == gt).sum())
@@ -516,12 +559,16 @@ def build_all(data: Path, log) -> dict:
         seasons_meta.append({"id": season, "label": season_label(season), "types": types,
                              "complete": bool(info.get("complete"))})
         summary[season] = len(games)
+        all_games[season] = games
+        war_file = data / "war" / f"{season}.json"
 
         fresh = (built.get(str(season)) == stamp and info.get("complete")
                  and all((out / f"{kind}_{season}_{t['id']}.json").exists()
-                         for t in types for kind in ("goalies", "onice", "wowy")))
+                         for t in types for kind in ("goalies", "onice", "wowy"))
+                 and (data / "war" / f"{season}.json").exists())
         if fresh and str(season) in scales:
             prior_scale = scales[str(season)]
+            war_prior = (store.read_json(war_file, {}) or {}).get("ratings")
             continue
 
         events = store.read(data, "events", season)
@@ -555,6 +602,18 @@ def build_all(data: Path, log) -> dict:
             store.write_json(out / f"lines_{season}_{gname}.json", combos["lines"], compact=True)
             store.write_json(out / f"pairs_{season}_{gname}.json", combos["pairs"], compact=True)
             store.write_json(out / f"wowy_{season}_{gname}.json", wowy_table(ice, ids, names, abbr), compact=True)
+        # WAR: regular season only; each season starts from last season's ratings
+        reg = games[games["game_type"] == 2]
+        reg_ids = set(reg["game_id"].astype(int))
+        st = ice["stints"][ice["stints"]["game_id"].isin(reg_ids)] if len(ice["stints"]) else ice["stints"]
+        pl = ice["players"][ice["players"]["game_id"].isin(reg_ids)] if len(ice["players"]) else ice["players"]
+        if len(st) and len(pl):
+            saved = war.skaters(st, pl, shots, events, reg,
+                                _names(rosters[rosters["game_id"].isin(reg_ids)], reg), war_prior)
+            store.write_json(war_file, saved, compact=True)
+            war_prior = saved["ratings"]
+        elif war_file.exists():
+            war_file.unlink()
         built[str(season)] = stamp
         latest = (shots, games, _names(rosters, games))
         log(f"stats: built season {season} ({len(games)} games, {len(shots):,} shots, "
@@ -563,6 +622,8 @@ def build_all(data: Path, log) -> dict:
 
     if latest is not None:  # the newest season that was rebuilt this run
         store.write_json(out / "recent.json", shot_maps(*latest), compact=True)
+
+    war_meta = _finish_war(data, out, all_games, manifest, log)
 
     report = store.read_json(data / "model" / "xg_report.json", {}) or {}
     store.write_json(out / "model.json", report, compact=True)
@@ -575,6 +636,7 @@ def build_all(data: Path, log) -> dict:
         "danger": {"high": HIGH_DANGER, "medium": MED_DANGER},
         "xg_scale": {k: v for k, v in scales.items()},
         "shift_coverage": coverage,
+        "war": war_meta,
     })
     store.write_json(data / "manifest.json", manifest)
     return summary

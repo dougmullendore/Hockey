@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover
     def module_fixture(fn):
         return fn
 
-from pipeline import aggregate, config, features, onice, store, xg
+from pipeline import aggregate, config, features, onice, rapm, store, war, xg
 from pipeline.parse import parse_game, parse_shifts
 
 FIX = Path(__file__).parent / "fixtures"
@@ -111,6 +111,12 @@ def test_model_and_tables(data_dir, monkeypatch):
     assert sum(s["g"] for s in skaters) == sum(t["gf"] for t in teams)
     assert all(s["pos"] in ("F", "D") for s in skaters)
 
+    # WAR is produced for the one season that has shift data
+    table = json.loads((out / "war_20252026_regular.json").read_text())
+    assert {r["pos"] for r in table} == {"F", "D", "G"}
+    assert all(abs(r["war"]) < 3 for r in table)          # one game cannot be worth much
+    assert not (out / "war_20212022_regular.json").exists()
+
     recent = json.loads((out / "games_20252026_regular.json").read_text())
     assert len(recent) == len(games) and all(r["hxg"] > 0 and r["axg"] > 0 for r in recent)
 
@@ -152,3 +158,37 @@ def test_on_ice(data_dir):
     w = aggregate.wowy_table(res, {gid}, names, abbr)
     a, b, team, toi = w["pairs"][0][:4]
     assert toi <= min(w["totals"][f"{a}|{team}"][0], w["totals"][f"{b}|{team}"][0])
+
+
+def test_penalties_ignore_offsetting_minors():
+    import pandas as pd
+    ev = pd.DataFrame({
+        "type": ["penalty"] * 5, "game_id": [1] * 5, "period": [1, 2, 2, 3, 3],
+        "period_seconds": [100, 300, 300, 50, 60], "team_id": [10, 10, 20, 20, 10],
+        "penalty_minutes": [2, 2, 2, 4, 5], "penalty_type": ["MIN", "MIN", "MIN", "MIN", "MAJ"],
+        "player1_id": [1, 2, 3, 4, 5], "player2_id": [3, 3, 2, 1, 4],
+    })
+    taken, drawn, n = war.penalties(ev, {1})
+    assert n == 3                       # one minor + one double minor; the matching pair cancels
+    assert taken.to_dict() == {1: 1.0, 4: 2.0} and drawn.to_dict() == {3: 1.0, 1: 2.0}
+
+
+def test_rapm_recovers_a_planted_effect():
+    import numpy as np
+    import pandas as pd
+    rng = np.random.default_rng(3)
+    n, players = 6000, np.arange(1, 41)
+    lines = np.array([rng.choice(players, 10, replace=False) for _ in range(n)])
+    dur = rng.integers(20, 60, n)
+    # player 1 lifts his own team's chances by 2 per hour, home or away
+    star_home, star_away = (lines[:, :5] == 1).any(axis=1), (lines[:, 5:] == 1).any(axis=1)
+    hxg = rng.poisson((2.5 + 2.0 * star_home) * dur / 3600.0 * 20, n) / 20.0
+    axg = rng.poisson((2.5 + 2.0 * star_away) * dur / 3600.0 * 20, n) / 20.0
+    st = pd.DataFrame(np.column_stack([np.arange(n) % 50, np.zeros(n), dur, np.ones(n), lines]),
+                      columns=onice.STINT_COLS[:14]).astype("int64")
+    st["hxg"], st["axg"], st["hgoals"], st["agoals"], st["score"], st["fo"] = hxg, axg, 0.0, 0.0, 0, 9
+    fit = rapm.fit(st, "ev", 1.0)
+    off = dict(zip(fit["players"], fit["off"]))
+    assert off[1] == max(off.values()) and 1.5 < off[1] < 2.5
+    others = [v for k, v in off.items() if k != 1]
+    assert max(abs(v) for v in others) < 0.5              # nobody else gets his credit
