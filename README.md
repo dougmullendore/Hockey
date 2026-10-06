@@ -10,7 +10,7 @@ You do not need to run anything. GitHub does it all on a schedule.
 
 | Page | What it shows |
 | --- | --- |
-| Home | A shot map for each recent game, plus season leaders |
+| Home | A shot map for each recent game, season leaders, and the newest posts from the Stars Spotlight newsletter |
 | Games | Every game: the score next to the expected goals; plus win probabilities for the next week |
 | Standings | Projected points, playoff odds and Stanley Cup odds from simulating the rest of the season |
 | WAR | Wins above replacement for every skater and goalie, split into its parts |
@@ -44,7 +44,8 @@ Each run does these things, in order:
    tables.
 4. **Odds**: rate every team, predict the coming week's games, and simulate
    the rest of the season for playoff and Stanley Cup odds.
-5. **Site**: put the pages and tables together.
+5. **News**: read the newest post titles from the Stars Spotlight newsletter.
+6. **Site**: put the pages and tables together.
 
 Results are stored on two side branches of this repository:
 
@@ -77,11 +78,14 @@ A minute later the site is live at
 | `pipeline/cards.py` | Player card percentiles |
 | `pipeline/contracts.py` | Cap hits set against dollar values (optional) |
 | `pipeline/predict.py` | Game win probabilities and the season simulation |
+| `pipeline/newsletter.py` | Newest post titles from the newsletter's feed |
 | `pipeline/aggregate.py` | The tables shown on the site |
 | `site/` | The web pages (HTML, CSS, JavaScript) |
 | `tests/` | Checks run against four real games |
 
-To rename the site, change `SITE_NAME` in `pipeline/config.py`.
+To rename the site, change `SITE_NAME` in `pipeline/config.py`. The newsletter
+shown in the menu and on the home page is set by `NEWSLETTER_NAME` and
+`NEWSLETTER_URL` in the same file.
 
 **Once a year:** when the league announces the next season's salary cap, add
 that season's cap and minimum salary to `SALARY_CAP` in `pipeline/config.py`.

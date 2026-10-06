@@ -66,6 +66,10 @@ def main(data_dir: str, out_dir: str) -> int:
         from . import predict
         return predict.build(data, data / "site_data", log)
 
+    def do_news():
+        from . import newsletter
+        return newsletter.build(data / "site_data", log)
+
     def do_site():
         from . import build_site
         return build_site.build(data, out, log)
@@ -74,6 +78,7 @@ def main(data_dir: str, out_dir: str) -> int:
     stage("model", do_model)
     stage("stats", do_stats)
     stage("odds", do_odds)
+    stage("news", do_news)
     stage("site", do_site)
 
     status["finished_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")

@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover
     def module_fixture(fn):
         return fn
 
-from pipeline import aggregate, config, contracts, features, onice, rapm, store, war, xg
+from pipeline import aggregate, config, contracts, features, newsletter, onice, rapm, store, war, xg
 from pipeline.parse import parse_game, parse_shifts
 
 FIX = Path(__file__).parent / "fixtures"
@@ -289,3 +289,32 @@ def test_contracts_join_retained_salary_and_match_by_name():
     assert {k: v["first"] for k, v in found.items()} == {"1": "Tim", "2": "Jack", "4": "Quinn"}
     assert [m["last"] for m in missed] == ["Nobody"]
     assert contracts.load(folder / "missing") == ([], {})       # no file, no page
+
+
+def test_newsletter_feed_is_read_and_survives_an_outage(monkeypatch):
+    import tempfile
+    feed = """<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>
+      <title><![CDATA[Stars Spotlight]]></title><description><![CDATA[Dallas Stars &amp; more]]></description>
+      <item><title><![CDATA[Older post]]></title><link>https://example.substack.com/p/older</link>
+        <pubDate>Mon, 28 Sep 2026 14:00:00 GMT</pubDate><description><![CDATA[<p>First <b>teaser</b></p>]]></description></item>
+      <item><title><![CDATA[Newer &amp; better]]></title><link>https://example.substack.com/p/newer</link>
+        <pubDate>Sun, 04 Oct 2026 14:00:00 GMT</pubDate><description><![CDATA[""" + "word " * 80 + """]]></description></item>
+      <item><title>Bad link</title><link>javascript:alert(1)</link></item>
+    </channel></rss>"""
+    got = newsletter.parse(feed, "https://example.substack.com")
+    assert [p["title"] for p in got["posts"]] == ["Newer & better", "Older post"]      # newest first, bad link dropped
+    assert got["posts"][0]["date"] == "2026-10-04" and got["posts"][1]["teaser"] == "First teaser"
+    assert len(got["posts"][0]["teaser"]) <= newsletter.TEASER_CHARS + 1 and got["posts"][0]["teaser"].endswith("…")
+    assert got["description"] == "Dallas Stars & more"
+
+    out = Path(tempfile.mkdtemp(prefix="news"))
+    monkeypatch.setattr(newsletter.nhl_api, "get_text", lambda url, retries=None: feed)
+    assert newsletter.build(out, log=lambda m: None)["posts"] == 2
+
+    def down(url, retries=None):
+        raise newsletter.nhl_api.FetchError("403")
+    monkeypatch.setattr(newsletter.nhl_api, "get_text", down)
+    result = newsletter.build(out, log=lambda m: None)                 # outage: keep what we had
+    assert result["kept_posts"] == 2
+    saved = store.read_json(out / "newsletter.json")
+    assert len(saved["posts"]) == 2 and saved["name"] == config.NEWSLETTER_NAME

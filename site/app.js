@@ -23,6 +23,7 @@
     (kids || []).forEach(function (c) { if (c != null) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
     return n;
   }
+  function safeUrl(u) { return /^https?:\/\//i.test(u || "") ? u : null; }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
   function load(name) {
@@ -799,6 +800,20 @@
     hero.appendChild(strip); hero.appendChild(grid);
     var leaders = el("section", { "class": "leaders", "aria-label": "Season leaders" });
     main.appendChild(leaders);
+    var news = el("section", { "class": "news", hidden: true });
+    main.appendChild(news);
+    load("newsletter").then(function (n) {
+      var posts = (n.posts || []).filter(function (p) { return safeUrl(p.link); }).slice(0, 5);
+      if (!posts.length || !safeUrl(n.url)) return;
+      news.hidden = false;
+      news.appendChild(el("h2", { text: "Latest from " + n.name }));
+      news.appendChild(el("ul", {}, posts.map(function (p) {
+        return el("li", {}, [el("time", { datetime: p.date, text: niceDate(p.date) }),
+          el("a", { href: p.link, target: "_blank", rel: "noopener", text: p.title }),
+          p.teaser ? el("span", { text: p.teaser }) : null]);
+      })));
+      news.appendChild(el("p", {}, [el("a", { href: n.url, target: "_blank", rel: "noopener", text: "Read and subscribe at " + n.name })]));
+    }).catch(function () {});
 
     load("recent").then(function (games) {
       if (!games.length) { grid.appendChild(el("p", { "class": "empty", text: "No games yet this season." })); return; }
@@ -978,6 +993,15 @@
     state.season = m.seasons[0].id;
     state.type = m.seasons[0].types[m.seasons[0].types.length - 1].id;
     document.getElementById("brand-name").textContent = m.site;
+    load("newsletter").then(function (n) {
+      if (!n || !n.name || !safeUrl(n.url)) return;
+      var a = document.getElementById("nav-news"), f = document.getElementById("foot-news");
+      a.href = n.url; a.textContent = n.name; a.hidden = false;
+      f.appendChild(document.createTextNode("More hockey writing at "));
+      f.appendChild(el("a", { href: n.url, target: "_blank", rel: "noopener", text: n.name }));
+      f.appendChild(document.createTextNode("."));
+      f.hidden = false;
+    }).catch(function () {});
     var cnav = document.querySelector('.nav a[data-route="contracts"]');
     if (cnav && m.war && m.war.contracts) cnav.hidden = false;
     var d = new Date(m.updated_utc);

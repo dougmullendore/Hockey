@@ -86,4 +86,9 @@ API_STATS = "https://api.nhle.com/stats/rest/en"
 GOAL_X = 89.0
 
 SITE_NAME = "GOAT Hockey"
+
+# The companion newsletter. Its newest post titles are shown on the home page
+# and it gets a link in the menu. Set NEWSLETTER_URL to "" to remove both.
+NEWSLETTER_NAME = "Stars Spotlight"
+NEWSLETTER_URL = "https://starsspotlight.substack.com"
 SITE_TAGLINE = "NHL expected goals, goalie and team analytics"

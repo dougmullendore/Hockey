@@ -49,8 +49,8 @@ def get_json(url: str, retries: int | None = None, timeout: int = 60):
     raise FetchError(f"bad JSON from {url}: {last!r}")
 
 
-def get_text(url: str) -> str:
-    return get_bytes(url).decode("utf-8", errors="replace")
+def get_text(url: str, retries: int | None = None) -> str:
+    return get_bytes(url, retries).decode("utf-8", errors="replace")
 
 
 def get_many(urls: dict, threads: int | None = None, text: bool = False):

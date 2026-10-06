@@ -125,6 +125,15 @@ h3 { font-stretch: 85%; font-weight: 700; font-size: 1.0625rem; margin: 0 0 6px;
 .leaders .who small { color: var(--ink-2); margin-left: 6px; }
 .leaders .val { font-weight: 750; }
 .leaders p { margin: 8px 0 0; font-size: .875rem; }
+.nav a.ext::after { content: " \2197"; font-size: .8em; color: var(--ink-2); }
+.news { margin: 44px 0 36px; max-width: 860px; }
+.news ul { list-style: none; margin: 10px 0 0; padding: 0; border-top: 2px solid var(--ink); }
+.news li { display: grid; grid-template-columns: 5.2em 1fr; gap: 4px 14px; padding: 11px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
+.news time { color: var(--ink-2); font-size: .875rem; font-variant-numeric: tabular-nums; }
+.news li a { font-weight: 700; }
+.news li span { grid-column: 2; color: var(--ink-2); font-size: .9375rem; }
+.news p { margin: 10px 0 0; font-size: .875rem; }
+@media (max-width: 560px) { .news li { grid-template-columns: 1fr; } .news li span { grid-column: 1; } }
 
 /* ---------- table pages */
 .tabs { display: flex; flex-wrap: wrap; gap: 0 22px; border-bottom: 1px solid var(--rule); margin: 6px 0 16px; }
