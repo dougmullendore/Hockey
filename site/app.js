@@ -289,7 +289,7 @@
     [-1, 1].forEach(function (s) {
       // goal line is drawn inside the rounded corner: it is shorter than the rink is wide
       svg.appendChild(el("line", { "class": "thin", x1: s * 89, y1: -36.8, x2: s * 89, y2: 36.8 }));
-      svg.appendChild(el("path", { "class": "crease", d: "M" + s * 89 + " -4 h" + (-s * 4.5) + " a6 6 0 0 " + (s > 0 ? 0 : 1) + " 0 8 h" + (s * 4.5) + " z" }));
+      svg.appendChild(el("path", { "class": "crease", d: "M" + s * 89 + " -6 A6 6 0 0 " + (s > 0 ? 0 : 1) + " " + s * 89 + " 6 Z" }));
       [-22, 22].forEach(function (y) { svg.appendChild(el("circle", { "class": "thin", cx: s * 69, cy: y, r: 15 })); });
     });
     svg.appendChild(el("text", { "class": "lbl", x: -62, y: -36, "text-anchor": "middle", text: game.away + " shoots this way" }));
@@ -405,6 +405,7 @@
       "<p>Add the values up and you get the goals a team, skater or goalie would be expected to have, given the chances that happened.</p>" +
       "<h2>How well the model predicts</h2>" +
       "<p id='ab-test'></p><div class='facts' id='ab-facts'></div><div id='ab-chart'></div>" +
+      "<p id='ab-scale'></p>" +
       "<p class='note'>If the model is honest, shots it rates at 10% go in about 10% of the time. Each point is a tenth of the test shots, grouped from worst chances to best. Points on the dashed line are perfect.</p>" +
       "<h2>What the model cannot see</h2>" +
       "<p>The public feed records where a shot was taken, not what led up to it in detail. The model does not know about screens, passes across the slot, or where the goalie was standing. Shot locations are entered by hand at each arena and differ a little from rink to rink. Treat small differences between players as noise, especially early in a season.</p>" +
@@ -428,6 +429,9 @@
       var f = document.getElementById("ab-facts");
       facts.forEach(function (x) { f.appendChild(el("div", {}, [el("b", { text: x[0] }), el("span", { text: x[1] })])); });
       document.getElementById("ab-chart").appendChild(calibration(m.calibration));
+      var off = 100 * (o.xg / o.goals - 1);
+      document.getElementById("ab-scale").textContent = "It ran " + Math.abs(off).toFixed(1) + "% " + (off > 0 ? "high" : "low") +
+        " for that season. Scoring and record-keeping shift a little every year, so each season's values are scaled until the league's expected goals at a goalie equal the goals actually scored. That makes an exactly average goalie worth zero goals saved above expected. To keep the tables fair, every past game is also scored by a copy of the model that was never shown that game.";
     }).catch(function () {});
   }
 

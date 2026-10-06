@@ -63,7 +63,7 @@ a { color: var(--blue); text-underline-offset: 2px; }
 .nav a:hover { background: var(--ice); }
 .nav a[aria-current="page"] { background: var(--blue); color: var(--sheet); }
 
-main { padding-top: 28px; padding-bottom: 48px; min-height: 60vh; outline: none; }
+main { padding-top: 36px; padding-bottom: 48px; min-height: 60vh; outline: none; }
 .loading, .empty { color: var(--ink-2); padding: 40px 0; }
 .foot { color: var(--ink-2); font-size: .875rem; padding-top: 16px; padding-bottom: 32px; border-top: 1px solid var(--rule); }
 .foot p { margin: 4px 0; max-width: 70ch; }
@@ -173,7 +173,7 @@ table.stats { border-collapse: separate; border-spacing: 0; width: 100%; font-si
 .facts div { padding: 10px 14px 10px 0; border-bottom: 1px solid var(--rule); }
 .facts b { display: block; font-size: 1.625rem; font-stretch: var(--stretch-tight); font-weight: 800; line-height: 1.1; }
 .facts span { color: var(--ink-2); font-size: .875rem; }
-.chart { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 12px; max-width: 520px; }
+.chart { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 12px; max-width: 520px; margin-bottom: 14px; }
 .chart text { font-size: 11px; fill: var(--ink-2); font-family: inherit; }
 .chart .axis { stroke: var(--rule); } .chart .ideal { stroke: var(--ink-2); stroke-dasharray: 3 3; }
 .chart .pt { fill: var(--blue); } .chart .ln { stroke: var(--blue); fill: none; stroke-width: 2; }
