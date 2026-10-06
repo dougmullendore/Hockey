@@ -341,6 +341,7 @@ def finalize(seasons: dict, goalie_rows: dict, gpw: float, complete: set) -> dic
             rec["war"] = round(total / gpw, 2)
             rec["war82"] = round(total / gpw / x.gp * 82.0, 2) if x.gp else None
             rec["_main"], rec["_shares"] = x.main_team, x.shares
+            rec["_toi"], rec["_toi5"], rec["_toi_pp"], rec["_toi_sh"] = x.toi_all, x.toi5, x.toi_pp, x.toi_sh
             rows.append(rec)
         for x in goalie_rows.get(s) or []:
             gar = float(x["gsax"]) - g_rate * float(x["fa"])

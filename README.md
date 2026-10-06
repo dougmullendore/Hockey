@@ -13,6 +13,7 @@ You do not need to run anything. GitHub does it all on a schedule.
 | Home | A shot map for each recent game, plus season leaders |
 | Games | Every game: the score next to the expected goals |
 | WAR | Wins above replacement for every skater and goalie, split into its parts |
+| Cards | One card per player: where he ranks at his position in each part of his game |
 | Goalies | Goals saved above expected, overall and on high-danger shots |
 | Skaters | Goals, assists, individual expected goals, finishing; plus on-ice results at five-on-five |
 | Lines | Forward lines, defense pairs, and how any two teammates do with and without each other |

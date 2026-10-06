@@ -117,6 +117,15 @@ def test_model_and_tables(data_dir, monkeypatch):
     assert all(abs(r["war"]) < 3 for r in table)          # one game cannot be worth much
     assert not (out / "war_20212022_regular.json").exists()
 
+    # every player in the WAR table gets a card with percentiles from 0 to 100
+    deck = json.loads((out / "cards.json").read_text())
+    assert len(deck["players"]) == len(table)
+    for card in deck["players"].values():
+        year = card["y"]["20252026"]
+        n = len(deck["goalie_metrics"] if card["p"] == "G" else deck["skater_metrics"])
+        assert len(year["p1"]) == len(year["p3"]) == len(year["v1"]) == n
+        assert all(p is None or 0 <= p <= 100 for p in year["p1"] + year["p3"])
+
     recent = json.loads((out / "games_20252026_regular.json").read_text())
     assert len(recent) == len(games) and all(r["hxg"] > 0 and r["axg"] > 0 for r in recent)
 
@@ -192,3 +201,12 @@ def test_rapm_recovers_a_planted_effect():
     assert off[1] == max(off.values()) and 1.5 < off[1] < 2.5
     others = [v for k, v in off.items() if k != 1]
     assert max(abs(v) for v in others) < 0.5              # nobody else gets his credit
+
+
+def test_card_percentiles_rank_within_position():
+    from pipeline import cards
+    blended = {i: {"toi": 3600.0 * 20, "war": float(i), "gp": 82} for i in range(1, 11)}
+    blended[99] = {"toi": 3600.0, "war": 50.0, "gp": 4}            # too little ice time to rank
+    pct = cards._percentiles(blended, [("war", "toi", 0.25)], True)
+    assert pct[1][0] == [5] and pct[10][0] == [95] and pct[99][0] == [None]
+    assert pct[10][1] == [10.0]

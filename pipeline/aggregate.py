@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import config, features, onice, store, war, xg
+from . import cards, config, features, onice, store, war, xg
 
 HIGH_DANGER = 0.15   # a shot worth 15%+ is a high-danger chance
 MED_DANGER = 0.05
@@ -506,6 +506,8 @@ def _finish_war(data: Path, out: Path, all_games: dict, manifest: dict, log) -> 
                     check.append((w, pts[team]))
         rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in res["rows"]]
         store.write_json(out / f"war_{season}_regular.json", rows, compact=True)
+    card_info = cards.build(final, out)
+    log(f"cards: {card_info}")
     notes = final[max(final)]["notes"]
     meta = {"goals_per_win": gpw, "scale": notes["scale"],
             "replacement_per60": notes["replacement_per60"],

@@ -67,7 +67,7 @@
   // key, header, plain-English meaning, formatter, options
   var COLS = {
     goalies: [
-      ["name", "Goalie", "", F.txt, { name: 1 }],
+      ["name", "Goalie", "", F.txt, { name: 1, link: 1 }],
       ["team", "Team", "Most recent team first", F.txt, { left: 1 }],
       ["gp", "GP", "Games played", F.int],
       ["w", "W", "Wins", F.int],
@@ -84,7 +84,7 @@
       ["gsax_5v5", "5v5 GSAx", "Goals saved above expected at five-on-five", F.s1, { sign: 1 }]
     ],
     skaters: [
-      ["name", "Skater", "", F.txt, { name: 1 }],
+      ["name", "Skater", "", F.txt, { name: 1, link: 1 }],
       ["team", "Team", "Most recent team first", F.txt, { left: 1 }],
       ["pos", "Pos", "Forward or defenseman", F.txt, { left: 1 }],
       ["gp", "GP", "Games played", F.int],
@@ -124,7 +124,7 @@
       ["goaltending", "Goaltending", "Goals saved above expected by the team's goalies", F.s1, { sign: 1 }]
     ],
     war: [
-      ["name", "Player", "", F.txt, { name: 1 }],
+      ["name", "Player", "", F.txt, { name: 1, link: 1 }],
       ["team", "Team", "Most recent team first", F.txt, { left: 1 }],
       ["pos", "Pos", "Forward, defenseman or goalie", F.txt, { left: 1 }],
       ["gp", "GP", "Games played", F.int],
@@ -141,7 +141,7 @@
       ["gar", "GAR", "Goals above replacement: WAR before goals are converted to wins", F.d1, { sign: 1 }]
     ],
     onice: [
-      ["name", "Skater", "", F.txt, { name: 1 }],
+      ["name", "Skater", "", F.txt, { name: 1, link: 1 }],
       ["team", "Team", "Most recent team first", F.txt, { left: 1 }],
       ["pos", "Pos", "Forward or defenseman", F.txt, { left: 1 }],
       ["gp", "GP", "Games played", F.int],
@@ -335,6 +335,7 @@
       cols.forEach(function (c) {
         var o = c[4] || {}, v = r[c[0]], cls = [], inner = esc(c[3](v));
         if (o.name) cls.push("name"); if (o.left) cls.push("l"); if (o.grp) cls.push("grp");
+        if (o.link && r.id) inner = '<a href="#/player-' + r.id + '">' + inner + "</a>";
         if (st.sort === c[0]) cls.push("sorted");
         var mid = o.bar ? (o.bar === 1 ? 0 : o.bar) : (o.mid || 0);
         if ((o.bar || o.sign || o.mid) && v != null && v !== mid) inner = '<span class="' + (v > mid ? "pos" : "neg") + '">' + inner + "</span>";
@@ -403,6 +404,152 @@
       : ((g.hxg > g.axg) === (g.hs > g.as) ? "The team with the better chances won." : "The team with the better chances lost.");
     card.appendChild(el("p", { style: "margin:0", text: verdict }));
     return card;
+  }
+
+  // ------------------------------------------------------ player cards --
+  var CARD_ROWS = {
+    skater: [
+      ["Value", [
+        ["war", "WAR", "everything below added up"],
+        ["ev_off", "Even-strength offense", "his effect on his team's chances at five-on-five"],
+        ["ev_def", "Even-strength defense", "his effect on the opponent's chances at five-on-five"],
+        ["pp", "Power play", "his effect on his team's power-play chances"],
+        ["pk", "Penalty kill", "his effect on opposing power-play chances"],
+        ["fin", "Finishing", "goals beyond what his shots were worth"],
+        ["pen", "Penalties", "penalties drawn minus penalties taken"]]],
+      ["Production", [
+        ["g", "Goals per 60", "goals per 60 minutes, all situations"],
+        ["a1", "Primary assists per 60", "last pass before a goal, per 60 minutes"],
+        ["ixg", "Expected goals per 60", "the quality and volume of his own shots"],
+        ["xg_pct", "On-ice xG share", "his team's share of expected goals at five-on-five while he is out"]]]],
+    goalie: [
+      ["Value", [
+        ["war", "WAR", "wins above a replacement goalie"],
+        ["gsax", "Goals saved above expected", "per 100 unblocked shots faced"],
+        ["gsax_5v5", "At five-on-five", "goals saved above expected at five-on-five, per 100 shots faced"],
+        ["hd_gsax", "On high-danger shots", "goals saved above expected per 100 high-danger shots"],
+        ["sv", "Save percentage", "saves divided by shots on goal"]]]]
+  };
+  function cardValue(key, v, single, goalie) {
+    if (v == null) return "";
+    if (key === "xg_pct") return v.toFixed(1) + "%";
+    if (key === "sv") return v.toFixed(3).replace(/^0/, "");
+    if (key === "g" || key === "a1" || key === "ixg") return v.toFixed(2);
+    if (key === "gsax" || key === "gsax_5v5" || key === "hd_gsax") return F.s2(v) + " per 100";
+    return F.s2(v) + (single ? " WAR" : (goalie ? " per 50 GP" : " per 82 GP"));
+  }
+  function ordinal(n) { var s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function seasonLabel(id) { id = String(id); return id.slice(0, 4) + "-" + id.slice(6); }
+
+  function cardPage(wanted) {
+    main.innerHTML = "";
+    main.appendChild(el("h1", { text: "Player cards" }));
+    main.appendChild(el("p", { "class": "lede", text: "Where a player ranks at his position in each part of his game. A bar at 90 means he was better than 90% of regulars at that position." }));
+    var controls = el("div", { "class": "controls" }), holder = el("div");
+    main.appendChild(controls); main.appendChild(holder);
+    holder.appendChild(el("p", { "class": "loading", text: "Loading\u2026" }));
+    var cs = state.card || (state.card = { id: null, season: null, single: false });
+
+    load("cards").then(function (doc) {
+      var P = doc.players, ids = Object.keys(P);
+      if (wanted && P[wanted]) { if (cs.id !== wanted) cs.season = null; cs.id = wanted; }
+      if (!cs.id || !P[cs.id]) {      // start on last full season's best skater
+        var ref = String(doc.seasons[Math.max(0, doc.seasons.length - 2)]), best = null;
+        ids.forEach(function (id) { var y = P[id].y[ref]; if (y && P[id].p !== "G" && (!best || y.war > P[best].y[ref].war)) best = id; });
+        cs.id = best || ids[0];
+      }
+      var pl = P[cs.id], goalie = pl.p === "G", years = Object.keys(pl.y).sort();
+      if (!cs.season || !pl.y[cs.season]) cs.season = years[years.length - 1];
+      var y = pl.y[cs.season], metrics = goalie ? doc.goalie_metrics : doc.skater_metrics;
+      var pct = cs.single ? y.p1 : y.p3, val = cs.single ? y.v1 : y.v3;
+      var group = goalie ? "goalies" : pl.p === "D" ? "defensemen" : "forwards";
+
+      // ---- controls: search, season, window
+      var box = el("input", { type: "search", id: "f-card-search", placeholder: "Type a name", autocomplete: "off" });
+      var hits = el("div", { "class": "hits", role: "listbox" });
+      box.addEventListener("input", function () {
+        var q = box.value.trim().toLowerCase(); hits.innerHTML = "";
+        if (q.length < 2) return;
+        ids.filter(function (id) { return (P[id].n || "").toLowerCase().indexOf(q) >= 0; })
+          .sort(function (a, b) { return Object.keys(P[b].y).length - Object.keys(P[a].y).length || P[a].n.localeCompare(P[b].n); })
+          .slice(0, 8).forEach(function (id) {
+            hits.appendChild(el("a", { href: "#/player-" + id, role: "option", text: P[id].n + ", " + (P[id].p === "G" ? "G" : P[id].p) + ", " + (P[id].t || "") }));
+          });
+        if (!hits.children.length) hits.appendChild(el("span", { text: "No player by that name in these seasons." }));
+      });
+      controls.appendChild(el("label", { "class": "field search" }, ["Find a player", box, hits]));
+      var ysel = el("select", { id: "f-card-season", onchange: function () { cs.season = ysel.value; cardPage(cs.id); } },
+        years.slice().reverse().map(function (s) { return el("option", { value: s, text: seasonLabel(s), selected: s === cs.season }); }));
+      controls.appendChild(el("label", { "class": "field" }, ["Season", ysel]));
+      controls.appendChild(el("div", { "class": "seg", role: "group", "aria-label": "Sample" }, [[false, "3-year weighted"], [true, "This season only"]].map(function (o) {
+        return el("button", { type: "button", "aria-pressed": String(cs.single === o[0]), text: o[1], onclick: function () { cs.single = o[0]; cardPage(cs.id); } });
+      })));
+
+      // ---- the card
+      holder.innerHTML = "";
+      var card = el("article", { "class": "pcard" });
+      var span = cs.single ? seasonLabel(cs.season) + " regular season"
+        : (y.n3 > 1 ? "Regular seasons through " + seasonLabel(cs.season) + ", last " + y.n3 + " weighted toward the most recent" : seasonLabel(cs.season) + " regular season (his only one in this span)");
+      var warPct = pct[0];
+      card.appendChild(el("header", { "class": "pcard-head" }, [
+        el("div", {}, [el("h2", { text: pl.n }),
+          el("p", { text: (goalie ? "Goalie" : pl.p === "D" ? "Defenseman" : "Forward") + ", " + (y.t || pl.t || "") + ". " + span + "." })]),
+        el("div", { "class": "pcard-war" }, [el("b", { text: warPct == null ? "\u2013" : String(warPct) }),
+          el("span", { text: warPct == null ? "Not enough ice time to rank" : "WAR percentile among " + group })])
+      ]));
+      var body = el("div", { "class": "pcard-body" + (goalie ? " one" : "") });
+      CARD_ROWS[goalie ? "goalie" : "skater"].forEach(function (g) {
+        var sec = el("section", {}, [el("h3", { text: g[0] })]);
+        g[1].forEach(function (m) {
+          var j = metrics.indexOf(m[0]), p = pct[j], v = val[j];
+          var row = el("div", { "class": "prow", tabindex: "0" });
+          row.appendChild(el("span", { "class": "plabel", text: m[1] }));
+          var track = el("span", { "class": "ptrack", role: "img", "aria-label": p == null ? m[1] + ": not enough ice time" : m[1] + ": " + ordinal(p) + " percentile" });
+          if (p != null) {
+            var strength = Math.round(30 + Math.abs(p - 50) * 1.4);
+            track.appendChild(el("i", { style: "width:" + Math.max(p, 2) + "%;background:color-mix(in srgb, var(--" + (p >= 50 ? "blue" : "red") + ") " + strength + "%, var(--mid))" }));
+          }
+          row.appendChild(track);
+          row.appendChild(el("b", { "class": "ppct", text: p == null ? "" : String(p) }));
+          row.appendChild(el("span", { "class": "pval", text: p == null ? "Too little ice time" : cardValue(m[0], v, cs.single, goalie) }));
+          var tipText = "<b>" + esc(m[1]) + "</b><br>" + esc(m[2].charAt(0).toUpperCase() + m[2].slice(1)) + "." +
+            (p == null ? "<br>Not enough ice time of this kind to rank him." : "<br>Better than " + p + "% of " + group + " with regular ice time.");
+          row.addEventListener("mousemove", function (e) { showTip(tipText, e.clientX, e.clientY); });
+          row.addEventListener("mouseleave", hideTip);
+          row.addEventListener("focus", function () { var r = row.getBoundingClientRect(); showTip(tipText, r.left + 40, r.bottom - 6); });
+          row.addEventListener("blur", hideTip);
+          sec.appendChild(row);
+        });
+        body.appendChild(sec);
+      });
+      card.appendChild(body);
+      card.appendChild(el("p", { "class": "pcard-foot", text: "Bars run from 0 (worst) to 100 (best); the tick marks the middle of the league. " + meta.site + "." }));
+      holder.appendChild(card);
+
+      // ---- season by season
+      holder.appendChild(el("h2", { text: "Season by season", style: "margin-top:32px" }));
+      var maxAbs = Math.max.apply(null, years.map(function (s) { return Math.abs(pl.y[s].war); }).concat([1]));
+      var cols = goalie ? [["Season", "l"], ["Team", "l"], ["GP"], ["W"], ["SA"], ["Sv%"], ["GSAx"], ["WAR"], ["", "l"]]
+        : [["Season", "l"], ["Team", "l"], ["GP"], ["TOI"], ["G"], ["A"], ["P"], ["WAR"], ["", "l"]];
+      var tb = el("tbody");
+      years.slice().reverse().forEach(function (s) {
+        var r = pl.y[s], w = Math.round(Math.abs(r.war) / maxAbs * 100);
+        var bar = '<span class="bar wide" aria-hidden="true">' + (r.war < 0 ? '<i class="n" style="width:' + w + '%"></i>' : '<i class="p" style="width:' + w + '%"></i>') + "</span>";
+        var cells = goalie ? [r.gp, F.int(r.w), F.int(r.sa), F.sv(r.sv), F.s1(r.gsax)] : [r.gp, F.int(r.toi), r.g, r.a, r.g + r.a];
+        var tr = el("tr", { "class": s === cs.season ? "current" : "" });
+        tr.innerHTML = '<td class="l"><a href="#/player-' + cs.id + '" data-season="' + s + '">' + seasonLabel(s) + '</a></td><td class="l">' + esc(r.t || "") + "</td>" +
+          cells.map(function (c) { return "<td>" + esc(c) + "</td>"; }).join("") + "<td><b>" + F.d2(r.war) + '</b></td><td class="l">' + bar + "</td>";
+        tr.querySelector("a").addEventListener("click", function (e) { e.preventDefault(); cs.season = s; cardPage(cs.id); });
+        tb.appendChild(tr);
+      });
+      holder.appendChild(el("div", { "class": "tablewrap fit" }, [el("table", { "class": "stats plain" }, [
+        el("thead", {}, [el("tr", {}, cols.map(function (c) { return el("th", { scope: "col", "class": c[1] || "", text: c[0] }); }))]), tb])]));
+      holder.appendChild(el("p", { "class": "note", text: "Regular seasons only. Select a season to see its card." }));
+      document.title = pl.n + " | " + meta.site;
+    }).catch(function () {
+      holder.innerHTML = "";
+      holder.appendChild(el("p", { "class": "empty", text: "Player cards could not be loaded. Reload the page to try again." }));
+    });
   }
 
   // ------------------------------------------------- with or without --
@@ -569,6 +716,8 @@
       "<p>For skaters it adds six parts. Four come from a regression that looks at every stretch of play and works out each skater's own effect on chances, with his linemates, opponents, the score and where his shifts started taken into account: five-on-five offense, five-on-five defense, power play and penalty kill. The other two are counted directly: finishing (goals beyond what his shots were worth) and penalties drawn minus taken. Goalies are rated on goals saved above expected.</p>" +
       "<p id='ab-war'></p>" +
       "<p>A few choices are worth knowing about. Forwards and defensemen are each rated against their own position. A skater's rating starts each season from a faded copy of last season's and from the typical level for his role on the team, then moves as evidence comes in, so early-season numbers lean on last year. Only part of a hot or cold shooting season is credited, because finishing mostly does not repeat. And the regression cannot fully separate players who are always on the ice together, so it splits their credit.</p>" +
+      "<h2>Player cards</h2>" +
+      "<p>A card ranks a player against others at his position, on rates rather than totals so missed games do not count against him. By default it blends three seasons, with the newest counting three times as much as the oldest, because one season is a small sample for most of these measures. Players without regular ice time of a given kind (the power play, say) are not ranked on it.</p>" +
       "<h2>On-ice numbers</h2>" +
       "<p>The league publishes when every player steps on and off the ice. Laid over the shot data, that shows which ten skaters were out for each shot. On-ice numbers, lines, pairs and the with-or-without tables all come from that, and all are at five-on-five: five skaters and a goalie on each side.</p>" +
       "<p id='ab-shifts'></p>" +
@@ -635,9 +784,12 @@
     hideTip();
     var r = (location.hash.replace(/^#\/?/, "").split("?")[0] || "home").toLowerCase();
     Array.prototype.forEach.call(document.querySelectorAll(".nav a"), function (a) {
-      var navKey = r === "wowy" ? "lines" : (PAGES[r] && PAGES[r].nav) || r;
+      var player = /^player-(\d+)$/.exec(r);
+      var navKey = r === "wowy" ? "lines" : player ? "cards" : (PAGES[r] && PAGES[r].nav) || r;
       if (a.dataset.route === navKey) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
+    var pm = /^player-(\d+)$/.exec(r);
+    if (pm || r === "cards") { cardPage(pm ? pm[1] : null); window.scrollTo(0, 0); return; }
     if (PAGES[r]) tablePage(r); else if (r === "wowy") wowyPage(); else if (r === "about") about(); else home();
     document.title = (r === "war" ? "WAR | " : PAGES[r] ? PAGES[r].title + " | " : r === "wowy" ? "With or without | " : r === "about" ? "About | " : "") + meta.site;
     window.scrollTo(0, 0);
