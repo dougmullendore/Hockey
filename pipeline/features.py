@@ -31,7 +31,7 @@ CATEGORICAL = ["shot_type_code", "prev_type_code"]
 
 # Penalty shots are one-on-one and are not modelled; they get a flat value
 # (the league converts roughly one in three).
-PENALTY_SHOT_XG = 0.32
+PENALTY_SHOT_XG = 0.30
 
 
 def _code(series: pd.Series, levels: list[str], other: str) -> np.ndarray:

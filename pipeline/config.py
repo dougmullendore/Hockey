@@ -1,15 +1,34 @@
 """Settings for the whole pipeline. Change things here, not in the other files."""
 
-# Seasons the site covers, oldest first. A season is named by its two years,
-# e.g. 20252026 is the 2025-26 season.
-SEASONS = [20212022, 20222023, 20232024, 20242025, 20252026, 20262027]
+import datetime as _dt
 
-# Seasons used to train the expected-goals model (the newest full seasons).
-XG_TRAIN_SEASONS = [20212022, 20222023, 20232024, 20242025, 20252026]
-# Season held out to test the model before the final fit.
-XG_TEST_SEASON = 20252026
+# The first season the site covers. A season is named by its two years,
+# e.g. 20252026 is the 2025-26 season.
+FIRST_SEASON = 20212022
+
+
+def _seasons_through_today() -> list[int]:
+    today = _dt.datetime.now(_dt.timezone.utc).date()
+    last_start = today.year if today.month >= 9 else today.year - 1
+    first_start = FIRST_SEASON // 10000
+    return [y * 10000 + y + 1 for y in range(first_start, last_start + 1)]
+
+
+# Every season from FIRST_SEASON to the current one, oldest first. A new
+# season is picked up automatically each September.
+SEASONS = _seasons_through_today()
+
+# The expected-goals model is trained on this many of the newest completed
+# seasons, and retrains itself whenever another season finishes.
+XG_TRAIN_SEASON_COUNT = 5
 # Bump this to force the model to be retrained on the next run.
-XG_MODEL_VERSION = "xg-v1"
+XG_MODEL_VERSION = "xg-v3"
+# How the league's scorers record shots drifts from year to year, so recent
+# seasons count for more: each season back is worth this fraction of the next.
+XG_SEASON_DECAY = 0.5
+# While a season is young its xG is scaled toward last season's level; this
+# is how many expected goals of "benefit of the doubt" last season gets.
+XG_SCALE_PRIOR = 1500.0
 
 # Game types: 2 = regular season, 3 = playoffs.
 GAME_TYPES = {2: "regular", 3: "playoffs"}

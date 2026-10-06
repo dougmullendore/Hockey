@@ -43,18 +43,20 @@ def season_label(season: int) -> str:
 
 
 # --------------------------------------------------------------- scoring --
-def scored_shots(data: Path, season: int, model, games: pd.DataFrame,
-                 events: pd.DataFrame) -> pd.DataFrame:
+def scored_shots(model: dict, season: int, games: pd.DataFrame, events: pd.DataFrame,
+                 prior_scale: float = 1.0, prior_weight: float = 0.0):
+    """Returns (shots with xG, the season's scale factor)."""
     shots = features.build_shots(events, games)
     if not len(shots):
-        return pd.DataFrame(columns=SHOT_COLS)
-    shots["xg"] = xg.predict(model, shots)
+        return pd.DataFrame(columns=SHOT_COLS), prior_scale
+    shots["xg"], scale = xg.season_scale(
+        shots, xg.predict(model, shots, season), prior_scale, prior_weight)
     shots["strength"] = features.strength(shots)
     g = games.set_index("game_id")
     home = shots["game_id"].map(g["home_id"]).astype("Int64")
     away = shots["game_id"].map(g["away_id"]).astype("Int64")
     shots["opp_id"] = home.where(shots["team_id"] == away, away)
-    return shots[SHOT_COLS]
+    return shots[SHOT_COLS], scale
 
 
 def _write_shots(data: Path, season: int, shots: pd.DataFrame) -> None:
@@ -320,6 +322,33 @@ def game_list(shots: pd.DataFrame, games: pd.DataFrame, limit: int | None = None
     return out
 
 
+def shot_maps(shots: pd.DataFrame, games: pd.DataFrame, names: pd.DataFrame, limit: int = 16) -> list[dict]:
+    """Shot-by-shot detail for the most recent games (for the rink chart).
+
+    Coordinates are in feet from centre ice with the home team attacking to
+    the right. Each shot is [x, y, xG, goal, is_home, period, shooter, type]."""
+    out = []
+    listing = {g["id"]: g for g in game_list(shots, games)}
+    ordered = games.sort_values(["date", "game_id"], ascending=False, kind="stable").head(limit)
+    by_game = dict(tuple(shots.groupby("game_id")))
+    for g in ordered.itertuples(index=False):
+        gid = int(g.game_id)
+        d = by_game.get(gid)
+        if d is None:
+            continue
+        rows = []
+        for s in d.sort_values("game_seconds", kind="stable").itertuples(index=False):
+            home = int(s.team_id == g.home_id)
+            sign = 1 if home else -1
+            pid = None if pd.isna(s.shooter_id) else int(s.shooter_id)
+            nm = names.loc[pid, "name"] if pid in names.index else ""
+            rows.append([int(sign * s.x_adj), int(sign * s.y_adj), round(float(s.xg), 3),
+                         int(s.goal), home, int(s.period), nm, s.shot_type if pd.notna(s.shot_type) else "",
+                         s.strength])
+        out.append({**listing[gid], "shots": rows})
+    return out
+
+
 # -------------------------------------------------------------------- main --
 def build_all(data: Path, log) -> dict:
     data = Path(data)
@@ -330,8 +359,11 @@ def build_all(data: Path, log) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     manifest = store.read_json(data / "manifest.json", {}) or {}
     built = manifest.setdefault("_stats", {})
+    scales = manifest.setdefault("_xg_scale", {})
+    prior_scale = 1.0
 
     seasons_meta, summary = [], {}
+    latest = None
     for season in config.SEASONS:
         games = store.read(data, "games", season)
         if not len(games):
@@ -350,12 +382,16 @@ def build_all(data: Path, log) -> dict:
 
         fresh = (built.get(str(season)) == stamp and info.get("complete")
                  and all((out / f"goalies_{season}_{t['id']}.json").exists() for t in types))
-        if fresh:
+        if fresh and str(season) in scales:
+            prior_scale = scales[str(season)]
             continue
 
         events = store.read(data, "events", season)
         rosters = store.read(data, "rosters", season)
-        shots = scored_shots(data, season, model, games, events)
+        shots, scale = scored_shots(
+            model, season, games, events, prior_scale,
+            0.0 if info.get("complete") else config.XG_SCALE_PRIOR)
+        scales[str(season)] = prior_scale = round(float(scale), 5)
         _write_shots(data, season, shots)
         for gt, gname in config.GAME_TYPES.items():
             gm = games[games["game_type"] == gt]
@@ -373,8 +409,12 @@ def build_all(data: Path, log) -> dict:
                              skater_table(sh, ev, names, _official(data, "skater", season, gt)), compact=True)
             store.write_json(out / f"games_{season}_{gname}.json", game_list(sh, gm), compact=True)
         built[str(season)] = stamp
+        latest = (shots, games, _names(rosters, games))
         log(f"stats: built season {season} ({len(games)} games, {len(shots):,} shots, "
-            f"{shots['goal'].sum()} goals, {shots['xg'].sum():.0f} xG)")
+            f"{shots['goal'].sum()} goals, {shots['xg'].sum():.0f} xG, scale {scale:.3f})")
+
+    if latest is not None:  # the newest season that was rebuilt this run
+        store.write_json(out / "recent.json", shot_maps(*latest), compact=True)
 
     report = store.read_json(data / "model" / "xg_report.json", {}) or {}
     store.write_json(out / "model.json", report, compact=True)
@@ -385,6 +425,7 @@ def build_all(data: Path, log) -> dict:
         "model": {"version": report.get("version"), "auc": report.get("overall", {}).get("auc"),
                   "test_season": report.get("test_season")},
         "danger": {"high": HIGH_DANGER, "medium": MED_DANGER},
+        "xg_scale": {k: v for k, v in scales.items()},
     })
     store.write_json(data / "manifest.json", manifest)
     return summary

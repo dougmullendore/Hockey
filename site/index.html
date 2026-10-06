@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Slot</title>
+<meta name="description" content="NHL expected goals, goalie, skater and team analytics, updated every night.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead">
+  <div class="wrap masthead-row">
+    <a class="brand" href="#/" aria-label="The Slot, home">
+      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
+        <path d="M2 26V10a12 12 0 0 1 24 0v16" fill="none" stroke="currentColor" stroke-width="2.5"/>
+        <path d="M9 26v-8a5 5 0 0 1 10 0v8z" fill="var(--crease)" stroke="var(--red)" stroke-width="1.5"/>
+      </svg>
+      <span id="brand-name">The Slot</span>
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#/games" data-route="games">Games</a>
+      <a href="#/goalies" data-route="goalies">Goalies</a>
+      <a href="#/skaters" data-route="skaters">Skaters</a>
+      <a href="#/teams" data-route="teams">Teams</a>
+      <a href="#/about" data-route="about">About</a>
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap" tabindex="-1">
+  <p class="loading">Loading the numbers…</p>
+</main>
+<footer class="wrap foot">
+  <p id="foot-updated"></p>
+  <p>Built from the NHL's public game feeds. Not affiliated with or endorsed by the NHL or any team.</p>
+</footer>
+<div id="tip" class="tip" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

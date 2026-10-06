@@ -74,12 +74,18 @@ def test_features_complete(data_dir):
 
 def test_model_and_tables(data_dir, monkeypatch):
     monkeypatch.setattr(config, "SEASONS", [20212022, 20242025, 20252026])
-    monkeypatch.setattr(config, "XG_TRAIN_SEASONS", [20212022, 20242025, 20252026])
     monkeypatch.setattr(xg, "MIN_GAMES_PER_SEASON", 1)
+    # two finished seasons to learn from, one season still in progress
+    store.write_json(data_dir / "manifest.json", {
+        "20212022": {"complete": True, "games": 1},
+        "20242025": {"complete": True, "games": 1},
+        "20252026": {"complete": False, "games": 2}})
+    assert xg.train_seasons(data_dir) == [20212022, 20242025]
     monkeypatch.setitem(xg.PARAMS, "min_samples_leaf", 10)
     monkeypatch.setitem(xg.PARAMS, "max_iter", 30)
     res = xg.ensure_model(data_dir, print)
     assert res["trained"] and xg.load(data_dir) is not None
+    assert len(xg.load(data_dir)["folds"]) == xg.N_FOLDS
     assert xg.ensure_model(data_dir, print)["trained"] is False
 
     aggregate.build_all(data_dir, print)
