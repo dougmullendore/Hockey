@@ -1,0 +1,127 @@
+{
+ "started_utc": "2026-10-08T10:38:02+00:00",
+ "commit": "e01f7ce0f1e2",
+ "stages": {
+  "fetch": {
+   "ok": true,
+   "seconds": 10.7,
+   "result": [
+    {
+     "season": 20212022,
+     "skipped": "complete",
+     "games": 1401
+    },
+    {
+     "season": 20212022,
+     "shifts": "complete"
+    },
+    {
+     "season": 20222023,
+     "skipped": "complete",
+     "games": 1400
+    },
+    {
+     "season": 20222023,
+     "shifts": "complete"
+    },
+    {
+     "season": 20232024,
+     "skipped": "complete",
+     "games": 1400
+    },
+    {
+     "season": 20232024,
+     "shifts": "complete"
+    },
+    {
+     "season": 20242025,
+     "skipped": "complete",
+     "games": 1398
+    },
+    {
+     "season": 20242025,
+     "shifts": "complete"
+    },
+    {
+     "season": 20252026,
+     "skipped": "complete",
+     "games": 1394
+    },
+    {
+     "season": 20252026,
+     "shifts": "complete"
+    },
+    {
+     "season": 20262027,
+     "games": 55,
+     "downloaded": 16,
+     "failed": 0,
+     "complete": false
+    },
+    {
+     "season": 20262027,
+     "shift_games": 55,
+     "downloaded": 16,
+     "from_reports": 0,
+     "missing": 0
+    }
+   ]
+  },
+  "model": {
+   "ok": true,
+   "seconds": 2.1,
+   "result": {
+    "trained": false,
+    "version": "xg-v3",
+    "seasons": [
+     20212022,
+     20222023,
+     20232024,
+     20242025,
+     20252026
+    ],
+    "auc": 0.7877
+   }
+  },
+  "stats": {
+   "ok": true,
+   "seconds": 4.6,
+   "result": {
+    "20212022": 1401,
+    "20222023": 1400,
+    "20232024": 1400,
+    "20242025": 1398,
+    "20252026": 1394,
+    "20262027": 55
+   }
+  },
+  "odds": {
+   "ok": true,
+   "seconds": 0.9,
+   "result": {
+    "teams": 32,
+    "upcoming": 65,
+    "games_left": 1289
+   }
+  },
+  "news": {
+   "ok": true,
+   "seconds": 0.1,
+   "result": {
+    "error": "FetchError('403 https://starsspotlight.substack.com/feed')",
+    "kept_posts": 0
+   }
+  },
+  "site": {
+   "ok": true,
+   "seconds": 0.0,
+   "result": {
+    "files": 105,
+    "mb": 17.67,
+    "updated": "2026-10-08T10:38+00:00"
+   }
+  }
+ },
+ "finished_utc": "2026-10-08T10:38:20+00:00",
+ "ok": true
+}

@@ -1,0 +1,13 @@
+OK       87521 schedule_2025-10-07.json
+OK       90843 schedule_now.json
+OK      146277 pbp_2025020001.json
+OK      136763 pbp_2025020500.json
+OK      192535 pbp_2024030411.json
+OK      123330 pbp_2021020100.json
+OK       13529 boxscore_2025020001.json
+OK       11355 landing_2025020001.json
+OK      304721 shifts_2025020001.json
+OK       65173 season.json
+OK       57843 standings_now.json
+OK      184045 club_schedule_TOR_20252026.json
+OK       38937 goalie_summary_20252026.json

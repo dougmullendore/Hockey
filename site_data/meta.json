@@ -1,0 +1,244 @@
+{
+ "site": "GOAT Hockey",
+ "tagline": "NHL expected goals, goalie and team analytics",
+ "updated_utc": "2026-10-08T10:38+00:00",
+ "seasons": [
+  {
+   "id": 20262027,
+   "label": "2026-27",
+   "types": [
+    {
+     "id": "regular",
+     "games": 55,
+     "through": "2026-10-07"
+    }
+   ],
+   "complete": false
+  },
+  {
+   "id": 20252026,
+   "label": "2025-26",
+   "types": [
+    {
+     "id": "regular",
+     "games": 1312,
+     "through": "2026-04-16"
+    },
+    {
+     "id": "playoffs",
+     "games": 82,
+     "through": "2026-06-14"
+    }
+   ],
+   "complete": true
+  },
+  {
+   "id": 20242025,
+   "label": "2024-25",
+   "types": [
+    {
+     "id": "regular",
+     "games": 1312,
+     "through": "2025-04-17"
+    },
+    {
+     "id": "playoffs",
+     "games": 86,
+     "through": "2025-06-17"
+    }
+   ],
+   "complete": true
+  },
+  {
+   "id": 20232024,
+   "label": "2023-24",
+   "types": [
+    {
+     "id": "regular",
+     "games": 1312,
+     "through": "2024-04-18"
+    },
+    {
+     "id": "playoffs",
+     "games": 88,
+     "through": "2024-06-24"
+    }
+   ],
+   "complete": true
+  },
+  {
+   "id": 20222023,
+   "label": "2022-23",
+   "types": [
+    {
+     "id": "regular",
+     "games": 1312,
+     "through": "2023-04-14"
+    },
+    {
+     "id": "playoffs",
+     "games": 88,
+     "through": "2023-06-13"
+    }
+   ],
+   "complete": true
+  },
+  {
+   "id": 20212022,
+   "label": "2021-22",
+   "types": [
+    {
+     "id": "regular",
+     "games": 1312,
+     "through": "2022-05-01"
+    },
+    {
+     "id": "playoffs",
+     "games": 89,
+     "through": "2022-06-26"
+    }
+   ],
+   "complete": true
+  }
+ ],
+ "model": {
+  "version": "xg-v3",
+  "auc": 0.7877,
+  "test_season": 20252026
+ },
+ "danger": {
+  "high": 0.15,
+  "medium": 0.05
+ },
+ "xg_scale": {
+  "20212022": 0.98011,
+  "20222023": 0.97962,
+  "20232024": 1.04143,
+  "20242025": 1.02816,
+  "20252026": 0.98397,
+  "20262027": 0.99238
+ },
+ "shift_coverage": {
+  "20212022": {
+   "games": 1401,
+   "with_shifts": 1401
+  },
+  "20222023": {
+   "games": 1400,
+   "with_shifts": 1400
+  },
+  "20232024": {
+   "games": 1400,
+   "with_shifts": 1400
+  },
+  "20242025": {
+   "games": 1398,
+   "with_shifts": 1398
+  },
+  "20252026": {
+   "games": 1394,
+   "with_shifts": 1394
+  },
+  "20262027": {
+   "games": 55,
+   "with_shifts": 55
+  }
+ },
+ "war": {
+  "goals_per_win": 6.34,
+  "scale": {
+   "ev_off": 1.152,
+   "ev_def": 1.211,
+   "pp": 1.185,
+   "pk": 1.45
+  },
+  "replacement_per60": {
+   "ev_off": {
+    "F": -0.22,
+    "D": -0.096
+   },
+   "ev_def": {
+    "F": 0.007,
+    "D": -0.1
+   },
+   "pp": {
+    "F": -0.669,
+    "D": -0.309
+   },
+   "pk": {
+    "F": -0.167,
+    "D": -0.307
+   },
+   "fin": {
+    "F": -0.021,
+    "D": -0.007
+   },
+   "pen": {
+    "F": -0.016,
+    "D": -0.017
+   }
+  },
+  "goalie_replacement_per_100_shots": -0.553,
+  "penalty_value": 0.174,
+  "seasons": {
+   "20212022": {
+    "total": 618.5,
+    "skaters": 523.1,
+    "goalies": 95.4
+   },
+   "20222023": {
+    "total": 630.1,
+    "skaters": 528.5,
+    "goalies": 101.5
+   },
+   "20232024": {
+    "total": 624.3,
+    "skaters": 526.6,
+    "goalies": 97.7
+   },
+   "20242025": {
+    "total": 619.8,
+    "skaters": 521.3,
+    "goalies": 98.5
+   },
+   "20252026": {
+    "total": 620.2,
+    "skaters": 524.5,
+    "goalies": 95.6
+   },
+   "20262027": {
+    "total": 24.2,
+    "skaters": 22.3,
+    "goalies": 1.9
+   }
+  },
+  "dollars_per_war": {
+   "20212022": 3.113,
+   "20222023": 3.104,
+   "20232024": 3.152,
+   "20242025": 3.396,
+   "20252026": 3.761,
+   "20262027": 4.073
+  },
+  "contracts": {
+   "players": 786,
+   "unmatched": 8,
+   "season": 20262027,
+   "as_of": "2026-10-06",
+   "source": "published contract figures compiled by GOAT Hockey (792 of 806 confirmed on two cap-tracking sites)",
+   "dollars_per_war": 4.073
+  },
+  "settings": {
+   "lambda_ev": 20.0,
+   "lambda_pp": 5.0,
+   "fade": 0.7,
+   "finishing_k": 20.0
+  },
+  "team_check": {
+   "team_seasons": 160,
+   "corr": 0.935,
+   "points_per_war": 2.32,
+   "replacement_team_points": 45.9
+  }
+ }
+}

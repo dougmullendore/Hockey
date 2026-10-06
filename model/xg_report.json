@@ -1,0 +1,291 @@
+{
+ "overall": {
+  "shots": 119319,
+  "goals": 8566,
+  "xg": 8963.9,
+  "log_loss": 0.21711,
+  "baseline_log_loss": 0.25825,
+  "auc": 0.7877,
+  "brier": 0.05927
+ },
+ "calibration": [
+  {
+   "shots": 11932,
+   "avg_xg": 0.0037,
+   "goal_rate": 0.0035
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.0104,
+   "goal_rate": 0.0085
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.0183,
+   "goal_rate": 0.0177
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.0278,
+   "goal_rate": 0.027
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.0401,
+   "goal_rate": 0.0374
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.0562,
+   "goal_rate": 0.0548
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.0761,
+   "goal_rate": 0.077
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.1034,
+   "goal_rate": 0.1014
+  },
+  {
+   "shots": 11932,
+   "avg_xg": 0.1418,
+   "goal_rate": 0.1353
+  },
+  {
+   "shots": 11931,
+   "avg_xg": 0.2735,
+   "goal_rate": 0.2554
+  }
+ ],
+ "by_strength": {
+  "5v5": {
+   "shots": 92979,
+   "goals": 5673,
+   "xg": 5816.3,
+   "log_loss": 0.19608,
+   "baseline_log_loss": 0.22975,
+   "auc": 0.7897,
+   "brier": 0.05257
+  },
+  "PP": {
+   "shots": 17018,
+   "goals": 1668,
+   "xg": 1823.0,
+   "log_loss": 0.29805,
+   "baseline_log_loss": 0.3207,
+   "auc": 0.6884,
+   "brier": 0.08348
+  },
+  "SH": {
+   "shots": 2637,
+   "goals": 186,
+   "xg": 194.2,
+   "log_loss": 0.19928,
+   "baseline_log_loss": 0.25502,
+   "auc": 0.8385,
+   "brier": 0.05816
+  },
+  "EV": {
+   "shots": 2700,
+   "goals": 265,
+   "xg": 326.1,
+   "log_loss": 0.28271,
+   "baseline_log_loss": 0.32099,
+   "auc": 0.7612,
+   "brier": 0.08014
+  },
+  "EA": {
+   "shots": 2917,
+   "goals": 227,
+   "xg": 223.9,
+   "log_loss": 0.2505,
+   "baseline_log_loss": 0.27341,
+   "auc": 0.7129,
+   "brier": 0.06663
+  },
+  "EN": {
+   "shots": 1068,
+   "goals": 547,
+   "xg": 580.5,
+   "log_loss": 0.54473,
+   "baseline_log_loss": 0.69285,
+   "auc": 0.7843,
+   "brier": 0.18672
+  }
+ },
+ "goalie_in_net": {
+  "shots": 118251,
+  "goals": 8019,
+  "xg": 8383.5,
+  "log_loss": 0.21415,
+  "baseline_log_loss": 0.24795,
+  "auc": 0.7765,
+  "brier": 0.05812
+ },
+ "season_scale": 0.9565,
+ "goalie_in_net_scaled": {
+  "shots": 118251,
+  "goals": 8019,
+  "xg": 8019.0,
+  "log_loss": 0.21406,
+  "baseline_log_loss": 0.24795,
+  "auc": 0.7765,
+  "brier": 0.05809
+ },
+ "calibration_scaled": [
+  {
+   "shots": 11826,
+   "avg_xg": 0.0035,
+   "goal_rate": 0.0036
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.0098,
+   "goal_rate": 0.0084
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.0173,
+   "goal_rate": 0.0174
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.0263,
+   "goal_rate": 0.027
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.0378,
+   "goal_rate": 0.0365
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.053,
+   "goal_rate": 0.054
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.0715,
+   "goal_rate": 0.0759
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.0969,
+   "goal_rate": 0.0999
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.1324,
+   "goal_rate": 0.1337
+  },
+  {
+   "shots": 11825,
+   "avg_xg": 0.2296,
+   "goal_rate": 0.2218
+  }
+ ],
+ "test_season": 20252026,
+ "trees": 339,
+ "out_of_fold": {
+  "shots": 605302,
+  "goals": 43054,
+  "xg": 42880.1,
+  "log_loss": 0.21987,
+  "baseline_log_loss": 0.25655,
+  "auc": 0.7735,
+  "brier": 0.05959
+ },
+ "out_of_fold_calibration": [
+  {
+   "shots": 60531,
+   "avg_xg": 0.0036,
+   "goal_rate": 0.004
+  },
+  {
+   "shots": 60531,
+   "avg_xg": 0.0105,
+   "goal_rate": 0.0104
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.0178,
+   "goal_rate": 0.0199
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.0267,
+   "goal_rate": 0.0308
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.0383,
+   "goal_rate": 0.0418
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.0536,
+   "goal_rate": 0.0568
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.0732,
+   "goal_rate": 0.0748
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.0986,
+   "goal_rate": 0.1005
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.1339,
+   "goal_rate": 0.1308
+  },
+  {
+   "shots": 60530,
+   "avg_xg": 0.2523,
+   "goal_rate": 0.2416
+  }
+ ],
+ "version": "xg-v3",
+ "train_seasons": [
+  20212022,
+  20222023,
+  20232024,
+  20242025,
+  20252026
+ ],
+ "train_shots": 605302,
+ "train_goals": 43054,
+ "features": [
+  "dist",
+  "angle",
+  "x_adj",
+  "y_abs",
+  "shot_type_code",
+  "shooter_skaters",
+  "defender_skaters",
+  "empty_net",
+  "extra_attacker",
+  "score_diff",
+  "period",
+  "period_seconds",
+  "is_home",
+  "is_playoff",
+  "prev_type_code",
+  "prev_same_team",
+  "secs_since_prev",
+  "dist_from_prev",
+  "speed_from_prev",
+  "prev_x",
+  "prev_y_abs",
+  "angle_change",
+  "rebound",
+  "rush",
+  "secs_since_faceoff"
+ ],
+ "sklearn": "1.9.1"
+}

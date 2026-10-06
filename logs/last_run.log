@@ -1,0 +1,12 @@
+[10:38:10] season 20262027: 1344 scheduled, 55 final, 52 stored, 16 to download
+[10:38:11]   season 20262027: 16/16 downloaded, 17,987 events stored
+[10:38:12]   season 20262027: shifts for 16/16 games, 41,757 shifts stored
+[10:38:13] rosters: 32 team lists fetched, 1595 players known
+[10:38:18] stats: built season 20262027 (55 games, 4,533 shots, 344 goals, 332 xG, scale 0.992, shifts for 55 games)
+[10:38:19] cards: {'players': 1672, 'seasons': 6}
+[10:38:19] contracts: 786 matched, 8 not matched (Jakub Dvorak, Remi Poirier, Vitali Pinchuk, Kurtis MacDermid, Jake O'Brien, Kyle Keyser, Quentin Musty, Cade Webber)
+[10:38:19] WAR: 6 seasons, 6.34 goals per win, team check {'team_seasons': 160, 'corr': 0.935, 'points_per_war': 2.32, 'replacement_team_points': 45.9}
+[10:38:20] odds: 65 upcoming games, 1289 left to simulate, backtest 0.6648 vs 0.6906
+[10:38:20] newsletter: {'error': "FetchError('403 https://starsspotlight.substack.com/feed')", 'kept_posts': 0}
+[10:38:20] site: 105 files, 17.7 MB
+[10:38:20] run finished: OK
