@@ -29,7 +29,7 @@
     if (cache[name]) return cache[name];
     var inline = window.__DATA__ && window.__DATA__[name];
     cache[name] = inline !== undefined ? Promise.resolve(inline)
-      : fetch("data/" + name + ".json" + (meta ? "?v=" + encodeURIComponent(meta.updated_utc) : ""), { cache: meta ? "default" : "no-cache" })
+      : fetch("data/" + name + ".json", { cache: "no-cache" })
           .then(function (r) { if (!r.ok) throw new Error(name + " " + r.status); return r.json(); });
     cache[name].catch(function () { delete cache[name]; });
     return cache[name];
