@@ -13,7 +13,8 @@ You do not need to run anything. GitHub does it all on a schedule.
 | Home | A shot map for each recent game, plus season leaders |
 | Games | Every game: the score next to the expected goals |
 | Goalies | Goals saved above expected, overall and on high-danger shots |
-| Skaters | Goals, assists, individual expected goals, finishing |
+| Skaters | Goals, assists, individual expected goals, finishing; plus on-ice results at five-on-five |
+| Lines | Forward lines, defense pairs, and how any two teammates do with and without each other |
 | Teams | Expected goals share, Corsi, PDO, finishing and goaltending |
 | About | How the model works and how well it tested |
 
@@ -30,8 +31,9 @@ The file `.github/workflows/update.yml` tells GitHub to run the pipeline:
 
 Each run does four things, in order:
 
-1. **Fetch**: download any finished games not stored yet, and re-check the
-   last three days for the league's stat corrections.
+1. **Fetch**: download any finished games not stored yet (play-by-play and
+   shift charts), and re-check the last three days for the league's stat
+   corrections.
 2. **Model**: train the expected-goals model if there isn't one, or if a
    season has just finished. Otherwise skip.
 3. **Stats**: score every shot and build the goalie, skater, team and game
@@ -64,6 +66,7 @@ A minute later the site is live at
 | `pipeline/config.py` | Settings: site name, first season, model options |
 | `pipeline/fetch.py`, `parse.py` | Downloading games and tidying them |
 | `pipeline/features.py`, `xg.py` | The expected-goals model |
+| `pipeline/onice.py` | Who was on the ice for every shot (from shift charts) |
 | `pipeline/aggregate.py` | The tables shown on the site |
 | `site/` | The web pages (HTML, CSS, JavaScript) |
 | `tests/` | Checks run against four real games |

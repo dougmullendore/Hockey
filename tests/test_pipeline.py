@@ -11,8 +11,8 @@ except ImportError:  # pragma: no cover
     def module_fixture(fn):
         return fn
 
-from pipeline import aggregate, config, features, store, xg
-from pipeline.parse import parse_game
+from pipeline import aggregate, config, features, onice, store, xg
+from pipeline.parse import parse_game, parse_shifts
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -31,6 +31,8 @@ def data_dir(tmp_path_factory):
     for g, e, r in load_all():
         s = by_season.setdefault(g[1], ([], [], []))
         s[0].append(g); s[1].extend(e); s[2].extend(r)
+    shifts = parse_shifts(json.load(gzip.open(FIX / "shifts_2025020001.json.gz")), 2025020001)
+    store.write(d, "shifts", 20252026, store.frame("shifts", shifts))
     for season, (g, e, r) in by_season.items():
         store.write(d, "games", season, store.frame("games", g))
         store.write(d, "events", season, store.frame("events", e))
@@ -111,3 +113,42 @@ def test_model_and_tables(data_dir, monkeypatch):
 
     recent = json.loads((out / "games_20252026_regular.json").read_text())
     assert len(recent) == len(games) and all(r["hxg"] > 0 and r["axg"] > 0 for r in recent)
+
+
+def test_shifts_parse():
+    rows = parse_shifts(json.load(gzip.open(FIX / "shifts_2025020001.json.gz")), 2025020001)
+    df = store.frame("shifts", rows)
+    assert len(df) > 600 and (df["end"] > df["start"]).all()
+    # six players a side for sixty minutes is twelve player-hours, less penalties
+    assert 11.5 < (df["end"] - df["start"]).sum() / 3600 <= 12.0
+
+
+def test_on_ice(data_dir):
+    season, gid = 20252026, 2025020001
+    games = store.read(data_dir, "games", season)
+    events = store.read(data_dir, "events", season)
+    rosters = store.read(data_dir, "rosters", season)
+    shifts = store.read(data_dir, "shifts", season)
+    shots = features.build_shots(events, games)
+    shots["xg"] = 0.07
+    shots["strength"] = features.strength(shots)
+    res = onice.build(games, events, rosters, shifts, shots)
+    assert res["skipped"] == 1 and len(res["checks"]) == 1   # only one game has shifts
+    chk = res["checks"].iloc[0]
+    assert chk["skaters_on_for_goal"] == 10 and chk["odd_seconds"] == 0
+    p, t = res["players"], res["teams"]
+    assert p["toi5"].sum() == 10 * chk["five_seconds"]
+    assert p["cf"].sum() == 5 * t["cf"].sum() and p["gf"].sum() == 5 * t["gf"].sum()
+    # each team's forward lines cannot add up to more than the 5v5 clock
+    lines = res["combos"].groupby(["team_id", "kind"])["toi5"].sum()
+    assert (lines <= chk["five_seconds"]).all() and (lines > 0.9 * chk["five_seconds"]).all()
+
+    names = aggregate._names(rosters[rosters["game_id"] == gid], games[games["game_id"] == gid])
+    abbr = aggregate._abbrevs(games)
+    table = aggregate.onice_table(res, {gid}, names)
+    assert len(table) == 36 and all(r["name"] for r in table)
+    combos = aggregate.combo_tables(res, {gid}, names, abbr)
+    assert combos["lines"] and combos["pairs"] and all(" / " in r["name"] for r in combos["pairs"])
+    w = aggregate.wowy_table(res, {gid}, names, abbr)
+    a, b, team, toi = w["pairs"][0][:4]
+    assert toi <= min(w["totals"][f"{a}|{team}"][0], w["totals"][f"{b}|{team}"][0])

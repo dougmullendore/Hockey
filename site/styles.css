@@ -125,6 +125,10 @@ h3 { font-stretch: 85%; font-weight: 700; font-size: 1.0625rem; margin: 0 0 6px;
 .leaders p { margin: 8px 0 0; font-size: .875rem; }
 
 /* ---------- table pages */
+.tabs { display: flex; flex-wrap: wrap; gap: 0 22px; border-bottom: 1px solid var(--rule); margin: 6px 0 16px; }
+.tabs a { color: var(--ink-2); text-decoration: none; font-weight: 650; font-stretch: 88%; padding: 8px 0; margin-bottom: -1px; border-bottom: 3px solid transparent; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--red); }
 .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin: 18px 0 10px; }
 .field { display: grid; gap: 3px; font-size: .8125rem; color: var(--ink-2); }
 .field select, .field input {

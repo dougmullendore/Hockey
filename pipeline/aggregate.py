@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import config, features, store, xg
+from . import config, features, onice, store, xg
 
 HIGH_DANGER = 0.15   # a shot worth 15%+ is a high-danger chance
 MED_DANGER = 0.05
@@ -81,7 +81,7 @@ def _read_shots(data: Path, season: int) -> pd.DataFrame | None:
 def _names(rosters: pd.DataFrame, games: pd.DataFrame) -> pd.DataFrame:
     """Latest name, position and team(s) for every player in a set of games."""
     if not len(rosters):
-        return pd.DataFrame(columns=["name", "pos", "team", "gp_dressed"]).rename_axis("player_id")
+        return pd.DataFrame(columns=["name", "last", "pos", "team", "gp_dressed"]).rename_axis("player_id")
     abbr = pd.concat([
         games[["home_id", "home_abbrev"]].set_axis(["id", "ab"], axis=1),
         games[["away_id", "away_abbrev"]].set_axis(["id", "ab"], axis=1),
@@ -92,7 +92,7 @@ def _names(rosters: pd.DataFrame, games: pd.DataFrame) -> pd.DataFrame:
     last = r.groupby("player_id").tail(1).set_index("player_id")
     teams = r.groupby("player_id")["ab"].agg(lambda s: "/".join(pd.unique(s.dropna())[::-1][:3]))
     out = pd.DataFrame({
-        "name": last["name"], "pos": last["position"], "team": teams,
+        "name": last["name"], "last": last["last_name"], "pos": last["position"], "team": teams,
         "gp_dressed": r.groupby("player_id")["game_id"].nunique(),
     })
     return out
@@ -349,6 +349,141 @@ def shot_maps(shots: pd.DataFrame, games: pd.DataFrame, names: pd.DataFrame, lim
     return out
 
 
+# ------------------------------------------------------------------ on-ice --
+SUMS = ["toi5", *onice.FOR, *onice.AGAINST]
+MIN_LINE_SECONDS = 300    # lines and pairs with under 5 minutes are dropped
+MIN_WOWY_SECONDS = 600    # teammate pairs with under 10 minutes are dropped
+
+
+def _abbrevs(games: pd.DataFrame) -> dict:
+    out = {}
+    for g in games.itertuples(index=False):
+        out[int(g.home_id)], out[int(g.away_id)] = g.home_abbrev, g.away_abbrev
+    return out
+
+
+def _rates(d, prefix="") -> dict:
+    """Shares and per-60 rates from a row of on-ice sums."""
+    hours = float(d["toi5"]) / 3600.0
+    sh = d["gf"] / d["sf"] if d["sf"] else None
+    sv = 1 - d["ga"] / d["sa"] if d["sa"] else None
+    return {
+        prefix + "toi": _r(d["toi5"] / 60.0, 1),
+        prefix + "cf_pct": _pct(d["cf"], d["cf"] + d["ca"]),
+        prefix + "xgf": _r(d["xgf"], 1), prefix + "xga": _r(d["xga"], 1),
+        prefix + "xg_pct": _pct(d["xgf"], d["xgf"] + d["xga"]),
+        prefix + "gf": _r(d["gf"], 0), prefix + "ga": _r(d["ga"], 0),
+        prefix + "gf_pct": _pct(d["gf"], d["gf"] + d["ga"]),
+        prefix + "xgf60": _r(d["xgf"] / hours, 2) if hours else None,
+        prefix + "xga60": _r(d["xga"] / hours, 2) if hours else None,
+        prefix + "cf60": _r(d["cf"] / hours, 1) if hours else None,
+        prefix + "ca60": _r(d["ca"] / hours, 1) if hours else None,
+        prefix + "osh": _r(100 * sh, 1) if sh is not None else None,
+        prefix + "osv": _r(100 * sv, 1) if sv is not None else None,
+        prefix + "pdo": _r(100 * (sh + sv), 1) if sh is not None and sv is not None else None,
+    }
+
+
+def onice_table(res: dict, ids: set, names: pd.DataFrame) -> list[dict]:
+    """Five-on-five results with each skater on the ice, and with him off it."""
+    p = res["players"]
+    p = p[p["game_id"].isin(ids)]
+    if not len(p):
+        return []
+    team = res["teams"].set_index(["game_id", "team_id"])[SUMS]
+    off = team.reindex(pd.MultiIndex.from_frame(p[["game_id", "team_id"]])).to_numpy() - p[SUMS].to_numpy()
+    off = pd.DataFrame(off, columns=SUMS).assign(player_id=p["player_id"].to_numpy())
+    on = p.groupby("player_id")[SUMS + ["toi_all"]].sum()
+    gp = p.groupby("player_id")["game_id"].nunique()
+    off = off.groupby("player_id")[SUMS].sum()
+    rows = []
+    for pid, d in on.iterrows():
+        pid = int(pid)
+        nm = names.loc[pid] if pid in names.index else None
+        pos = None if nm is None else nm["pos"]
+        o = off.loc[pid]
+        row = {"id": pid, "name": None if nm is None else nm["name"],
+               "team": None if nm is None else nm["team"],
+               "pos": "D" if pos == "D" else "F", "gp": int(gp[pid]),
+               "toi_gp": _r(d["toi5"] / 60.0 / gp[pid], 1), **_rates(d)}
+        on_xg, off_xg = _pct(d["xgf"], d["xgf"] + d["xga"]), _pct(o["xgf"], o["xgf"] + o["xga"])
+        on_cf, off_cf = _pct(d["cf"], d["cf"] + d["ca"]), _pct(o["cf"], o["cf"] + o["ca"])
+        row["xg_rel"] = _r(on_xg - off_xg, 1) if on_xg is not None and off_xg is not None else None
+        row["cf_rel"] = _r(on_cf - off_cf, 1) if on_cf is not None and off_cf is not None else None
+        rows.append(row)
+    rows.sort(key=lambda r: -(r["toi"] or 0))
+    return rows
+
+
+_POS_ORDER = {"L": 0, "C": 1, "R": 2, "D": 3}
+_COMBO_FIELDS = {"toi", "cf_pct", "xgf", "xga", "xg_pct", "gf", "ga", "xgf60", "xga60"}
+
+
+def combo_tables(res: dict, ids: set, names: pd.DataFrame, abbr: dict) -> dict:
+    """Forward lines and defence pairs. Returns {"lines": [...], "pairs": [...]}."""
+    c = res["combos"]
+    c = c[c["game_id"].isin(ids)]
+    out = {"lines": [], "pairs": []}
+    if not len(c):
+        return out
+    g = c.groupby(["team_id", "kind", "key"], sort=False)
+    sums = g[SUMS].sum()
+    sums["gp"] = g["game_id"].nunique()
+    sums = sums[sums["toi5"] >= MIN_LINE_SECONDS]
+    for (team_id, kind, key), d in sums.iterrows():
+        members = [int(x) for x in key.split("-")]
+        known = [m for m in members if m in names.index]
+        known.sort(key=lambda m: (_POS_ORDER.get(names.at[m, "pos"], 9), names.at[m, "last"] or ""))
+        label = " / ".join(str(names.at[m, "last"]) for m in known) or key
+        rates = {k: v for k, v in _rates(d).items() if k in _COMBO_FIELDS}
+        out["lines" if kind == "F" else "pairs"].append({
+            "name": label, "team": abbr.get(int(team_id)),
+            "full": ", ".join(str(names.at[m, "name"]) for m in known),
+            "gp": int(d["gp"]), **rates})
+    for rows in out.values():
+        rows.sort(key=lambda r: -(r["toi"] or 0))
+    return out
+
+
+def wowy_table(res: dict, ids: set, names: pd.DataFrame, abbr: dict) -> dict:
+    """Every pair of teammates: together, and each without the other.
+
+    Compact layout to keep the file small:
+      players  {id: [name, position, [team, ...]]}
+      totals   {"id|TEAM": [toi, cf, ca, xgf, xga, gf, ga]}  one skater on one team
+      pairs    [[id1, id2, TEAM, toi, cf, ca, xgf, xga, gf, ga], ...]  together"""
+    keep = ["toi5", "cf", "ca", "xgf", "xga", "gf", "ga"]
+    w = res["pairs"]
+    w = w[w["game_id"].isin(ids)] if len(w) else w
+    p = res["players"]
+    p = p[p["game_id"].isin(ids)]
+    if not len(w) or not len(p):
+        return {"players": {}, "totals": {}, "pairs": []}
+    pair = w.groupby(["team_id", "p1", "p2"], sort=False)[keep].sum()
+    pair = pair[pair["toi5"] >= MIN_WOWY_SECONDS]
+    tot = p.groupby(["player_id", "team_id"])[keep].sum()
+
+    def pack(d):
+        return [int(d["toi5"]), int(d["cf"]), int(d["ca"]), round(float(d["xgf"]), 2),
+                round(float(d["xga"]), 2), int(d["gf"]), int(d["ga"])]
+
+    pairs, used = [], set()
+    for (team_id, a, b), d in pair.iterrows():
+        pairs.append([int(a), int(b), abbr.get(int(team_id)), *pack(d)])
+        used.add((int(a), int(team_id))); used.add((int(b), int(team_id)))
+    totals, players = {}, {}
+    for (pid, team_id), d in tot.iterrows():
+        pid, team_id = int(pid), int(team_id)
+        if (pid, team_id) not in used:
+            continue
+        totals[f"{pid}|{abbr.get(team_id)}"] = pack(d)
+        nm = names.loc[pid] if pid in names.index else None
+        entry = players.setdefault(str(pid), [None if nm is None else nm["name"],
+                                              None if nm is None else ("D" if nm["pos"] == "D" else "F"), []])
+        entry[2].append(abbr.get(team_id))
+    return {"players": players, "totals": totals, "pairs": pairs}
+
+
 # -------------------------------------------------------------------- main --
 def build_all(data: Path, log) -> dict:
     data = Path(data)
@@ -360,6 +495,7 @@ def build_all(data: Path, log) -> dict:
     manifest = store.read_json(data / "manifest.json", {}) or {}
     built = manifest.setdefault("_stats", {})
     scales = manifest.setdefault("_xg_scale", {})
+    coverage = manifest.setdefault("_shift_coverage", {})
     prior_scale = 1.0
 
     seasons_meta, summary = [], {}
@@ -369,7 +505,8 @@ def build_all(data: Path, log) -> dict:
         if not len(games):
             continue
         info = manifest.get(str(season), {})
-        stamp = f"{config.XG_MODEL_VERSION}|{len(games)}|{games['date'].max()}|v3"
+        stamp = (f"{config.XG_MODEL_VERSION}|{len(games)}|{games['date'].max()}|"
+                 f"{info.get('shift_games', 0)}|v7|" + ",".join(map(str, model.get("train_seasons", []))))
         types = []
         for gt, gname in config.GAME_TYPES.items():
             n = int((games["game_type"] == gt).sum())
@@ -381,7 +518,8 @@ def build_all(data: Path, log) -> dict:
         summary[season] = len(games)
 
         fresh = (built.get(str(season)) == stamp and info.get("complete")
-                 and all((out / f"goalies_{season}_{t['id']}.json").exists() for t in types))
+                 and all((out / f"{kind}_{season}_{t['id']}.json").exists()
+                         for t in types for kind in ("goalies", "onice", "wowy")))
         if fresh and str(season) in scales:
             prior_scale = scales[str(season)]
             continue
@@ -393,6 +531,10 @@ def build_all(data: Path, log) -> dict:
             0.0 if info.get("complete") else config.XG_SCALE_PRIOR)
         scales[str(season)] = prior_scale = round(float(scale), 5)
         _write_shots(data, season, shots)
+        shifts = store.read(data, "shifts", season)
+        ice = onice.build(games, events, rosters, shifts, shots, log)
+        abbr = _abbrevs(games)
+        coverage[str(season)] = {"games": int(len(games)), "with_shifts": int(len(ice["checks"]))}
         for gt, gname in config.GAME_TYPES.items():
             gm = games[games["game_type"] == gt]
             if not len(gm):
@@ -408,10 +550,16 @@ def build_all(data: Path, log) -> dict:
             store.write_json(out / f"skaters_{season}_{gname}.json",
                              skater_table(sh, ev, names, _official(data, "skater", season, gt)), compact=True)
             store.write_json(out / f"games_{season}_{gname}.json", game_list(sh, gm), compact=True)
+            store.write_json(out / f"onice_{season}_{gname}.json", onice_table(ice, ids, names), compact=True)
+            combos = combo_tables(ice, ids, names, abbr)
+            store.write_json(out / f"lines_{season}_{gname}.json", combos["lines"], compact=True)
+            store.write_json(out / f"pairs_{season}_{gname}.json", combos["pairs"], compact=True)
+            store.write_json(out / f"wowy_{season}_{gname}.json", wowy_table(ice, ids, names, abbr), compact=True)
         built[str(season)] = stamp
         latest = (shots, games, _names(rosters, games))
         log(f"stats: built season {season} ({len(games)} games, {len(shots):,} shots, "
-            f"{shots['goal'].sum()} goals, {shots['xg'].sum():.0f} xG, scale {scale:.3f})")
+            f"{shots['goal'].sum()} goals, {shots['xg'].sum():.0f} xG, scale {scale:.3f}, "
+            f"shifts for {len(ice['checks'])} games)")
 
     if latest is not None:  # the newest season that was rebuilt this run
         store.write_json(out / "recent.json", shot_maps(*latest), compact=True)
@@ -426,6 +574,7 @@ def build_all(data: Path, log) -> dict:
                   "test_season": report.get("test_season")},
         "danger": {"high": HIGH_DANGER, "medium": MED_DANGER},
         "xg_scale": {k: v for k, v in scales.items()},
+        "shift_coverage": coverage,
     })
     store.write_json(data / "manifest.json", manifest)
     return summary

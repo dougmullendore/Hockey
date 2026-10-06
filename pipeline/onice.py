@@ -196,7 +196,21 @@ def build(games: pd.DataFrame, events: pd.DataFrame, rosters: pd.DataFrame,
             continue
         out["players"].append(p); out["combos"].append(c); out["pairs"].append(w)
         out["teams"].append(t); out["checks"].append(chk)
-    res = {k: (pd.concat(v, ignore_index=True) if v and k != "checks" else pd.DataFrame(v))
-           for k, v in out.items()}
+    empty = {
+        "players": ["game_id", "team_id", "player_id", "toi_all", "toi5", *FOR, *AGAINST],
+        "combos": ["game_id", "team_id", "kind", "key", "toi5", *FOR, *AGAINST],
+        "pairs": ["game_id", "team_id", "p1", "p2", "toi5", *FOR, *AGAINST],
+        "teams": ["game_id", "team_id", "toi5", *FOR, *AGAINST],
+        "checks": ["game_id"],
+    }
+    res = {}
+    for k, v in out.items():
+        v = [x for x in v if k == "checks" or len(x)]
+        if not v:
+            res[k] = pd.DataFrame(columns=empty[k])
+        elif k == "checks":
+            res[k] = pd.DataFrame(v)
+        else:
+            res[k] = pd.concat(v, ignore_index=True)
     res["skipped"] = skipped
     return res

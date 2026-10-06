@@ -123,6 +123,40 @@
       ["finish", "Finishing", "Goals scored minus expected goals: how much the shooters beat the chances", F.s1, { grp: 1, sign: 1 }],
       ["goaltending", "Goaltending", "Goals saved above expected by the team's goalies", F.s1, { sign: 1 }]
     ],
+    onice: [
+      ["name", "Skater", "", F.txt, { name: 1 }],
+      ["team", "Team", "Most recent team first", F.txt, { left: 1 }],
+      ["pos", "Pos", "Forward or defenseman", F.txt, { left: 1 }],
+      ["gp", "GP", "Games played", F.int],
+      ["toi", "TOI", "Minutes played at five-on-five", F.int],
+      ["toi_gp", "TOI/GP", "Five-on-five minutes per game", F.d1],
+      ["xg_pct", "xG%", "Share of expected goals while he is on the ice. Above 50 means his team gets the better chances", F.pct, { grp: 1, bar: 50 }],
+      ["xg_rel", "xG% Rel", "On-ice xG% minus the team's xG% in the same games when he is on the bench. Positive means the team does better with him out there", F.s1, { sign: 1 }],
+      ["cf_pct", "CF%", "Corsi: share of all shot attempts while he is on the ice, including blocked shots", F.pct, { mid: 50 }],
+      ["cf_rel", "CF% Rel", "On-ice CF% minus the team's CF% when he is on the bench", F.s1, { sign: 1 }],
+      ["xgf60", "xGF/60", "Team expected goals per 60 minutes with him on the ice", F.d2, { grp: 1 }],
+      ["xga60", "xGA/60", "Opponent expected goals per 60 minutes with him on the ice. Lower is better", F.d2],
+      ["gf", "GF", "Team goals with him on the ice", F.int, { grp: 1 }],
+      ["ga", "GA", "Opponent goals with him on the ice", F.int],
+      ["gf_pct", "GF%", "Share of goals while he is on the ice", F.pct, { mid: 50 }],
+      ["osh", "oiSh%", "On-ice shooting percentage: his team's goals divided by its shots on goal while he is out", F.pct],
+      ["osv", "oiSv%", "On-ice save percentage: his goalie's save percentage while he is out", F.pct],
+      ["pdo", "PDO", "oiSh% plus oiSv%. Far from 100 usually means luck that will not last", F.pct, { mid: 100 }]
+    ],
+    lines: [
+      ["name", "Line", "Left wing, center, right wing where the positions are known", F.txt, { name: 1 }],
+      ["team", "Team", "", F.txt, { left: 1 }],
+      ["gp", "GP", "Games in which the three played together", F.int],
+      ["toi", "TOI", "Minutes together at five-on-five", F.int],
+      ["xg_pct", "xG%", "Share of expected goals with this line on the ice", F.pct, { grp: 1, bar: 50 }],
+      ["cf_pct", "CF%", "Share of all shot attempts with this line on the ice", F.pct, { mid: 50 }],
+      ["xgf60", "xGF/60", "Expected goals for per 60 minutes", F.d2, { grp: 1 }],
+      ["xga60", "xGA/60", "Expected goals against per 60 minutes. Lower is better", F.d2],
+      ["xgf", "xGF", "Expected goals for", F.d1],
+      ["xga", "xGA", "Expected goals against", F.d1],
+      ["gf", "GF", "Goals for", F.int, { grp: 1 }],
+      ["ga", "GA", "Goals against", F.int]
+    ],
     games: [
       ["date", "Date", "", function (v) { return niceDate(v, true); }, { name: 1 }],
       ["away", "Away", "", F.txt, { left: 1 }],
@@ -137,10 +171,21 @@
       ["xgd", "Home xG edge", "Home expected goals minus away expected goals", F.s2, { bar: 1 }]
     ]
   };
+  COLS.pairs = COLS.lines.map(function (c) { return c.slice(); });
+  COLS.pairs[0] = ["name", "Pair", "", F.txt, { name: 1 }];
+  COLS.pairs[2] = ["gp", "GP", "Games in which the two played together", F.int];
+  var SKATER_TABS = [["skaters", "Individual"], ["onice", "On-ice at 5v5"]];
+  var LINE_TABS = [["lines", "Forward lines"], ["pairs", "Defense pairs"], ["wowy", "With or without"]];
   var PAGES = {
+    onice: { title: "Skaters", nav: "skaters", tabs: SKATER_TABS, sort: "xg_pct", lede: "What happens at five-on-five while each skater is on the ice, and how that compares with the same team when he sits.",
+      min: { key: "toi", label: "Minimum 5v5 minutes", steps: [0, 10, 25, 50, 100, 200, 400, 600, 800], share: 0.5 }, search: "name", pos: 1, noun: "skaters" },
+    lines: { title: "Lines and pairs", nav: "lines", tabs: LINE_TABS, sort: "toi", lede: "Forward trios at five-on-five: how much they play together and who gets the better of the chances when they do.",
+      min: { key: "toi", label: "Minimum minutes together", steps: [0, 10, 25, 50, 100, 200, 300], share: 0.3 }, search: "full", noun: "lines" },
+    pairs: { title: "Lines and pairs", nav: "lines", tabs: LINE_TABS, sort: "toi", lede: "Defense pairs at five-on-five: how much they play together and who gets the better of the chances when they do.",
+      min: { key: "toi", label: "Minimum minutes together", steps: [0, 10, 25, 50, 100, 200, 400], share: 0.15 }, search: "full", noun: "pairs" },
     goalies: { title: "Goalies", sort: "gsax", lede: "Who is stopping more than they should? Goals saved above expected compares each goalie with an average one facing the same shots.",
       min: { key: "fa", label: "Minimum unblocked shots faced", steps: [0, 25, 50, 100, 250, 500, 1000] }, search: "name", noun: "goalies" },
-    skaters: { title: "Skaters", sort: "ixg", lede: "Shot volume and shot quality for every skater, and whether the goals have kept up with the chances.",
+    skaters: { title: "Skaters", tabs: SKATER_TABS, sort: "ixg", lede: "Shot volume and shot quality for every skater, and whether the goals have kept up with the chances.",
       min: { key: "gp", label: "Minimum games played", steps: [0, 5, 10, 20, 40, 60] }, search: "name", pos: 1, noun: "skaters" },
     teams: { title: "Teams", sort: "xg_pct", lede: "Which teams are creating better chances than they give up, and which are riding the percentages.", noun: "teams" },
     games: { title: "Games", sort: "date", lede: "Every game with the final score next to what the chances said it should have been.", search: "_teams", noun: "games" }
@@ -159,12 +204,19 @@
   }
   function fixType() { if (!typeInfo(state.season, state.type)) state.type = "regular"; }
 
+  function tabBar(tabs, current) {
+    return el("nav", { "class": "tabs", "aria-label": "Views" }, tabs.map(function (t) {
+      return el("a", { href: "#/" + t[0], text: t[1], "aria-current": t[0] === current ? "page" : null });
+    }));
+  }
+
   function tablePage(kind) {
     var page = PAGES[kind], cols = COLS[kind];
     var st = state.tables[kind] || (state.tables[kind] = { sort: page.sort, dir: -1, q: "", pos: "", min: null });
     fixType();
     main.innerHTML = "";
     main.appendChild(el("h1", { text: page.title }));
+    if (page.tabs) main.appendChild(tabBar(page.tabs, kind));
     main.appendChild(el("p", { "class": "lede", text: page.lede }));
     var controls = el("div", { "class": "controls" });
     var holder = el("div");
@@ -180,7 +232,7 @@
         var top = Math.max.apply(null, rows.map(function (r) { return r[page.min.key] || 0; }).concat([0]));
         if (st.min == null) {
           st.min = 0;
-          page.min.steps.forEach(function (s) { if (s <= top * 0.25) st.min = s; });
+          page.min.steps.forEach(function (s) { if (s <= top * (page.min.share || 0.25)) st.min = s; });
         }
         var msel = el("select", { onchange: function () { st.min = +msel.value; draw(); } },
           page.min.steps.map(function (s) { return el("option", { value: s, text: s === 0 ? "No minimum" : s + "+", selected: s === st.min }); }));
@@ -269,7 +321,7 @@
           var w = Math.min(100, Math.abs(v - mid) / extent[c[0]] * 100).toFixed(0);
           inner += '<span class="bar" aria-hidden="true">' + (v < mid ? '<i class="n" style="width:' + w + '%"></i>' : '<i class="p" style="width:' + w + '%"></i>') + "</span>";
         }
-        tds += "<td" + (cls.length ? ' class="' + cls.join(" ") + '"' : "") + ">" + inner + "</td>";
+        tds += "<td" + (cls.length ? ' class="' + cls.join(" ") + '"' : "") + (o.name && r.full ? ' title="' + esc(r.full) + '"' : "") + ">" + inner + "</td>";
       });
       html.push("<tr>" + tds + "</tr>");
     });
@@ -330,6 +382,86 @@
       : ((g.hxg > g.axg) === (g.hs > g.as) ? "The team with the better chances won." : "The team with the better chances lost.");
     card.appendChild(el("p", { style: "margin:0", text: verdict }));
     return card;
+  }
+
+  // ------------------------------------------------- with or without --
+  function share(f, a) { return f + a > 0 ? 100 * f / (f + a) : null; }
+  function wowyPage() {
+    fixType();
+    var st = state.wowy || (state.wowy = { player: null, team: null, sort: "toi", dir: -1 });
+    main.innerHTML = "";
+    main.appendChild(el("h1", { text: "Lines and pairs" }));
+    main.appendChild(tabBar(LINE_TABS, "wowy"));
+    main.appendChild(el("p", { "class": "lede", text: "Pick a skater to see how he does at five-on-five with each teammate, and how each of them does without the other." }));
+    var controls = el("div", { "class": "controls" }), holder = el("div");
+    main.appendChild(controls); main.appendChild(holder);
+    seasonControls(function () { wowyPage(); }).forEach(function (c) { controls.appendChild(c); });
+    holder.appendChild(el("p", { "class": "loading", text: "Loading\u2026" }));
+
+    load("wowy_" + state.season + "_" + state.type).then(function (w) {
+      var ids = Object.keys(w.players);
+      if (!ids.length) { holder.innerHTML = ""; holder.appendChild(el("p", { "class": "empty", text: "No shift data for these games yet." })); return; }
+      // one entry per skater per team
+      var options = [];
+      ids.forEach(function (id) { w.players[id][2].forEach(function (tm) {
+        var tot = w.totals[id + "|" + tm]; if (tot) options.push({ id: +id, team: tm, name: w.players[id][0] || ("Player " + id), toi: tot[0] });
+      }); });
+      options.sort(function (a, b) { return a.name.localeCompare(b.name) || b.toi - a.toi; });
+      var teams = options.map(function (o) { return o.team; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort();
+      var found = options.filter(function (o) { return o.id === st.player && o.team === st.team; })[0];
+      if (!found) { found = options.slice().sort(function (a, b) { return b.toi - a.toi; })[0]; st.player = found.id; st.team = found.team; }
+      var teamFilter = state.wowyTeam && teams.indexOf(state.wowyTeam) >= 0 ? state.wowyTeam : found.team;
+
+      var tsel = el("select", { id: "f-wteam", onchange: function () {
+        state.wowyTeam = tsel.value;
+        var first = options.filter(function (o) { return o.team === tsel.value; }).sort(function (a, b) { return b.toi - a.toi; })[0];
+        st.player = first.id; st.team = first.team; wowyPage();
+      } }, teams.map(function (tm) { return el("option", { value: tm, text: tm, selected: tm === teamFilter }); }));
+      var psel = el("select", { id: "f-wplayer", onchange: function () { st.player = +psel.value; st.team = teamFilter; wowyPage(); } },
+        options.filter(function (o) { return o.team === teamFilter; }).map(function (o) {
+          return el("option", { value: o.id, text: o.name, selected: o.id === st.player });
+        }));
+      controls.appendChild(el("label", { "class": "field" }, ["Team", tsel]));
+      controls.appendChild(el("label", { "class": "field" }, ["Skater", psel]));
+
+      var me = w.totals[st.player + "|" + st.team], myName = w.players[st.player][0];
+      var rows = [];
+      w.pairs.forEach(function (p) {
+        if (p[2] !== st.team || (p[0] !== st.player && p[1] !== st.player)) return;
+        var other = p[0] === st.player ? p[1] : p[0], ot = w.totals[other + "|" + st.team];
+        if (!ot) return;
+        var tog = share(p[6], p[7]), meW = share(me[3] - p[6], me[4] - p[7]), otW = share(ot[3] - p[6], ot[4] - p[7]);
+        rows.push({ name: w.players[other][0], pos: w.players[other][1], toi: p[3] / 60, toi_me: (me[0] - p[3]) / 60, toi_ot: (ot[0] - p[3]) / 60,
+          tog: tog, me: meW, ot: otW, cf: share(p[4], p[5]), gf: p[8], ga: p[9],
+          lift: tog != null && otW != null ? tog - otW : null });
+      });
+      var cols = [
+        ["name", "Teammate", "", F.txt, { name: 1 }],
+        ["pos", "Pos", "Forward or defenseman", F.txt, { left: 1 }],
+        ["toi", "TOI together", "Five-on-five minutes the two shared the ice", F.int],
+        ["tog", "xG% together", "Share of expected goals when both are on the ice", F.pct, { grp: 1, bar: 50 }],
+        ["me", "xG% " + myName.split(" ").slice(-1)[0] + " alone", "Share of expected goals when " + myName + " is on the ice without this teammate", F.pct, { mid: 50 }],
+        ["ot", "xG% teammate alone", "Share of expected goals when the teammate is on the ice without " + myName, F.pct, { mid: 50 }],
+        ["lift", "Teammate's change", "The teammate's xG% with " + myName + " minus his xG% without him. Positive means the teammate does better alongside " + myName, F.s1, { sign: 1 }],
+        ["cf", "CF% together", "Share of all shot attempts when both are on the ice", F.pct, { grp: 1, mid: 50 }],
+        ["gf", "GF", "Goals for when both are on the ice", F.int],
+        ["ga", "GA", "Goals against when both are on the ice", F.int],
+        ["toi_me", "TOI apart", myName + "'s five-on-five minutes without this teammate", F.int, { grp: 1 }]
+      ];
+      function draw() {
+        holder.innerHTML = "";
+        holder.appendChild(el("h2", { text: myName + ", " + st.team }));
+        holder.appendChild(el("p", { "class": "note", style: "margin:0 0 12px", text: Math.round(me[0] / 60).toLocaleString("en-US") + " minutes at five-on-five, " +
+          F.pct(share(me[3], me[4])) + "% of expected goals, " + me[5] + " goals for and " + me[6] + " against." }));
+        if (!rows.length) { holder.appendChild(el("p", { "class": "empty", text: "No teammate has shared 10 minutes with him yet." })); return; }
+        holder.appendChild(statsTable(cols, rows, st, draw));
+        holder.appendChild(el("p", { "class": "note", text: "Teammates with at least 10 minutes together. Small samples swing wildly: 50 minutes is only about four games' worth of shifts." }));
+      }
+      draw();
+    }).catch(function () {
+      holder.innerHTML = "";
+      holder.appendChild(el("p", { "class": "empty", text: "This table could not be loaded. Reload the page to try again." }));
+    });
   }
 
   function home() {
@@ -409,15 +541,24 @@
       "<p class='note'>If the model is honest, shots it rates at 10% go in about 10% of the time. Each point is a tenth of the test shots, grouped from worst chances to best. Points on the dashed line are perfect.</p>" +
       "<h2>What the model cannot see</h2>" +
       "<p>The public feed records where a shot was taken, not what led up to it in detail. The model does not know about screens, passes across the slot, or where the goalie was standing. Shot locations are entered by hand at each arena and differ a little from rink to rink. Treat small differences between players as noise, especially early in a season.</p>" +
+      "<h2>On-ice numbers</h2>" +
+      "<p>The league publishes when every player steps on and off the ice. Laid over the shot data, that shows which ten skaters were out for each shot. On-ice numbers, lines, pairs and the with-or-without tables all come from that, and all are at five-on-five: five skaters and a goalie on each side.</p>" +
+      "<p id='ab-shifts'></p>" +
       "<h2>Glossary</h2><dl class='gloss' id='ab-gloss'></dl>" +
       "<h2>Data</h2><p>Games come from the NHL's public play-by-play feed and are refreshed every night. Games from the last three days are re-checked for the league's stat corrections. Shootouts are left out of every table.</p>";
     var seen = {}, gl = document.getElementById("ab-gloss");
     [["xG", "Expected goals: the chance a shot goes in, added up."]].concat(
-      ["goalies", "skaters", "teams"].reduce(function (acc, k) { return acc.concat(COLS[k].map(function (c) { return [c[1], c[2]]; })); }, [])
+      ["goalies", "skaters", "onice", "teams"].reduce(function (acc, k) { return acc.concat(COLS[k].map(function (c) { return [c[1], c[2]]; })); }, [])
     ).forEach(function (g) {
       if (!g[1] || seen[g[0]] || /^(GP|W|L|G|P|Team|Pos)$/.test(g[0])) return;
       seen[g[0]] = 1; gl.appendChild(el("dt", { text: g[0] })); gl.appendChild(el("dd", { text: g[1] }));
     });
+    var cov = meta.shift_coverage || {}, total = 0, have = 0, gaps = [];
+    Object.keys(cov).forEach(function (s) { total += cov[s].games; have += cov[s].with_shifts;
+      if (cov[s].with_shifts < cov[s].games) gaps.push((cov[s].games - cov[s].with_shifts) + " in " + s.slice(0, 4) + "-" + s.slice(6)); });
+    if (total) document.getElementById("ab-shifts").textContent = "Shift records are available for " + have.toLocaleString("en-US") + " of " + total.toLocaleString("en-US") + " games" +
+      (gaps.length ? ". The missing games (" + gaps.join(", ") + ") are left out of the on-ice tables." : ".") +
+      " Ice time added up from them matches the league's official totals to within half a percent for nearly every skater.";
     load("model").then(function (m) {
       if (!m || !m.overall) return;
       var o = m.overall, label = String(m.test_season).slice(0, 4) + "-" + String(m.test_season).slice(6);
@@ -459,10 +600,11 @@
     hideTip();
     var r = (location.hash.replace(/^#\/?/, "").split("?")[0] || "home").toLowerCase();
     Array.prototype.forEach.call(document.querySelectorAll(".nav a"), function (a) {
-      if (a.dataset.route === r) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+      var navKey = r === "wowy" ? "lines" : (PAGES[r] && PAGES[r].nav) || r;
+      if (a.dataset.route === navKey) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    if (PAGES[r]) tablePage(r); else if (r === "about") about(); else home();
-    document.title = (PAGES[r] ? PAGES[r].title + " | " : r === "about" ? "About | " : "") + meta.site;
+    if (PAGES[r]) tablePage(r); else if (r === "wowy") wowyPage(); else if (r === "about") about(); else home();
+    document.title = (PAGES[r] ? PAGES[r].title + " | " : r === "wowy" ? "With or without | " : r === "about" ? "About | " : "") + meta.site;
     window.scrollTo(0, 0);
   }
 
