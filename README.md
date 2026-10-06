@@ -1,6 +1,76 @@
-# Hockey
+# The Slot
 
-Advanced NHL stats site. Data is pulled nightly from the NHL's public data feed,
-run through an expected-goals model, and published as a static website.
+An advanced NHL stats website. Every night it downloads the league's public
+play-by-play data, rates every shot with an expected-goals model, and rebuilds
+the site.
 
-Work in progress.
+You do not need to run anything. GitHub does it all on a schedule.
+
+## What is on the site
+
+| Page | What it shows |
+| --- | --- |
+| Home | A shot map for each recent game, plus season leaders |
+| Games | Every game: the score next to the expected goals |
+| Goalies | Goals saved above expected, overall and on high-danger shots |
+| Skaters | Goals, assists, individual expected goals, finishing |
+| Teams | Expected goals share, Corsi, PDO, finishing and goaltending |
+| About | How the model works and how well it tested |
+
+Seasons covered: 2021-22 to today. A new season is added automatically each
+September.
+
+## How it runs
+
+The file `.github/workflows/update.yml` tells GitHub to run the pipeline:
+
+- every night at about 5:20am Central
+- whenever the code changes
+- whenever you press **Run workflow** on the repository's **Actions** tab
+
+Each run does four things, in order:
+
+1. **Fetch**: download any finished games not stored yet, and re-check the
+   last three days for the league's stat corrections.
+2. **Model**: train the expected-goals model if there isn't one, or if a
+   season has just finished. Otherwise skip.
+3. **Stats**: score every shot and build the goalie, skater, team and game
+   tables.
+4. **Site**: put the pages and tables together.
+
+Results are stored on two side branches of this repository:
+
+- `data`: the downloaded games, the model, and `status.json` (what happened
+  on the last run). `logs/last_run.log` has the full log.
+- `gh-pages`: the finished website.
+
+## Turning the website on
+
+One-time setup in the repository's **Settings**:
+
+1. **Settings → General → Danger Zone → Change visibility → Public.**
+   GitHub's free plan only hosts websites from public repositories. (Skip
+   this if you pay for GitHub Pro.)
+2. **Settings → Pages → Build and deployment → Source: Deploy from a branch**,
+   then choose branch **gh-pages** and folder **/ (root)**, and save.
+
+A minute later the site is live at
+`https://<your-username>.github.io/Hockey/`.
+
+## Where things are
+
+| Folder | What it is |
+| --- | --- |
+| `pipeline/config.py` | Settings: site name, first season, model options |
+| `pipeline/fetch.py`, `parse.py` | Downloading games and tidying them |
+| `pipeline/features.py`, `xg.py` | The expected-goals model |
+| `pipeline/aggregate.py` | The tables shown on the site |
+| `site/` | The web pages (HTML, CSS, JavaScript) |
+| `tests/` | Checks run against four real games |
+
+To rename the site, change `SITE_NAME` in `pipeline/config.py`.
+
+## Not affiliated with the NHL
+
+Data comes from the NHL's public game feeds. This project is not affiliated
+with or endorsed by the NHL or any team.
