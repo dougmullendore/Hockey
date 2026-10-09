@@ -49,32 +49,6 @@ shift charts, which list every shift of every game (`pipeline/lines.py`).
 - A game's shift chart sometimes arrives late or not at all; until it does,
   the page shows the lines from the game before.
 
-## Awards race
-
-The **Awards** page (sixth page) shows who would win each of the league's
-trophies if the season ended today (`pipeline/awards.py`).
-
-- The **Art Ross** (most points), **Rocket Richard** (most goals),
-  **Jennings** (goalies of the team allowing the fewest goals) and
-  **Presidents' Trophy** (best record) are counts, shown as they stand.
-- The others are voted on, so each list is the site's reading of the
-  numbers, not a forecast of the vote. Every eligible regular is placed among
-  the others on a few ingredients and the places are mixed into a score out
-  of 100: **Hart** (70% Impact added, 30% his team's record), **Norris** (50%
-  Impact, 30% points, 20% ice time, defensemen only), **Vezina** (50% goals
-  saved above expected, 25% save percentage, 25% wins), **Calder** (60%
-  Impact, 40% points, rookies only), **Selke** (30% plus-minus, 30% blocks
-  and takeaways, 20% faceoffs won, 20% penalty-kill time, forwards only) and
-  **Lady Byng** (60% points, 40% few penalty minutes). The weights are
-  `RECIPES` at the top of `pipeline/awards.py`.
-- The **Jack Adams** list ranks coaches by how far their team's share of the
-  possible points is ahead of what its rating before the season pointed to.
-- A rookie is as the league defines one: no earlier season of more than 25
-  games, not two earlier seasons of 6 games or more, and under 26 on
-  September 15.
-- Each list shows the top five (ten on request). Once a week has passed, an
-  arrow shows how far each name has moved in the last week.
-
 ## Team pages
 
 Every team name on the site links to that team's page (`#/team/DAL`): its
@@ -299,7 +273,6 @@ leaves the old site up; GitHub emails you, and the run log names the line.
 | `pipeline/config.py` | Every setting: season dates, odds settings, GOAT weights, what to show |
 | `pipeline/nhl.py` | Reads the league's feed: schedule, standings, box scores, rosters |
 | `pipeline/players.py` | Rates the players against each other and works out percentiles |
-| `pipeline/awards.py` | The awards races: counts for four trophies, a score for the voted ones |
 | `pipeline/lines.py` | Line combinations: who was on the ice together, from the shift charts |
 | `pipeline/careers.py` | Each player's earlier seasons, joined to this one for his career table |
 | `pipeline/teams.py` | Adds up each team's stats from the box scores |

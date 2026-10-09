@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pipeline import awards, careers, config, goat, lines, nhl, odds, players, run, teams, xg
+from pipeline import careers, config, goat, lines, nhl, odds, players, run, teams, xg
 
 FIX = Path(__file__).parent / "fixtures"
 UTC = dt.timezone.utc
@@ -183,8 +183,7 @@ def game_docs(state="OFF"):
             {"type": "MIN", "duration": 4, "committedByPlayer": {"sweaterNumber": 28}, "teamAbbrev": {"default": "BOS"}, "drawnBy": {"sweaterNumber": 8}},
             {"type": "MAJ", "duration": 5, "committedByPlayer": {"sweaterNumber": 6}, "teamAbbrev": {"default": "BOS"}, "drawnBy": {"sweaterNumber": 6}},
             {"type": "BEN", "duration": 2, "teamAbbrev": {"default": "BOS"}}]}]}}
-    rail = {"gameInfo": {"awayTeam": {"headCoach": {"default": "Andre Tourigny"}}, "homeTeam": {"headCoach": {"default": "Marco Sturm"}}},
-            "linescore": {"byPeriod": [{"periodDescriptor": {"number": n, "periodType": "REG"}, "away": a, "home": h} for n, a, h in ((1, 0, 1), (2, 1, 0), (3, 0, 1))],
+    rail = {"linescore": {"byPeriod": [{"periodDescriptor": {"number": n, "periodType": "REG"}, "away": a, "home": h} for n, a, h in ((1, 0, 1), (2, 1, 0), (3, 0, 1))],
                           "totals": {"away": 1, "home": 2}},
             "teamGameStats": [{"category": "sog", "awayValue": 37, "homeValue": 22}, {"category": "faceoffWinningPctg", "awayValue": 0.536, "homeValue": 0.464},
                               {"category": "faceoffWins", "awayValue": "37/69", "homeValue": "32/69"}, {"category": "powerPlay", "awayValue": "0/7", "homeValue": "1/4"},
@@ -220,7 +219,6 @@ def test_a_box_score_is_read():
     assert b["stars"] == [[21, "BOS", "D. Pastrnak"], [23, "BOS", "M. Lohrei"]]
     assert b["tstats"]["away"] == {"sog": 37, "fow": 37, "fot": 69, "ppg": 0, "ppo": 7, "pim": 8, "hits": 19, "blk": 6, "gv": 12, "tk": 3}
     assert b["tstats"]["home"]["ppg"] == 1 and b["tstats"]["home"]["ppo"] == 4
-    assert b["coach"] == {"away": "Andre Tourigny", "home": "Marco Sturm"}
 
 
 def test_a_box_score_without_its_summary_is_kept_but_marked():
@@ -231,7 +229,6 @@ def test_a_box_score_without_its_summary_is_kept_but_marked():
     whole = nhl.parse_box(*game_docs(), plays=fixture("play-by-play_2025020500.json.gz"))
     assert run.complete(whole) and whole["adv"]["xg"][1] > whole["adv"]["xg"][0]
     assert not run.complete({**whole, "adv": {**whole["adv"], "v": "an older model"}})
-    assert not run.complete({k: v for k, v in whole.items() if k != "coach"})          # stored before coaches were kept
     assert b["tstats"]["away"]["sog"] == 37 and b["tstats"]["home"]["hits"] == 3     # added up from the players
     assert "ppo" not in b["tstats"]["home"]
 
@@ -495,62 +492,15 @@ def test_team_stats_come_from_the_box_scores():
     assert teams.compute(table, shootout, boxes, {})["teams"][0]["gf_gp"] == 1.0      # the shootout winner's extra goal is not a goal scored
 
 
-# ------------------------------------------------------------- the awards --
-def test_who_is_a_rookie():
-    season = lambda year, games: [year, "Team", games]
-    assert awards.is_rookie([], "2006-06-13", 2026)                                           # first NHL games this season
-    assert awards.is_rookie([season(2025, 25)], "2004-01-01", 2026)                           # 25 games is still a rookie
-    assert not awards.is_rookie([season(2025, 26)], "2004-01-01", 2026)
-    assert not awards.is_rookie([season(2024, 6), season(2025, 6)], "2004-01-01", 2026)       # two seasons of six games
-    assert awards.is_rookie([season(2024, 5), season(2025, 6)], "2004-01-01", 2026)
-    assert not awards.is_rookie([season(2025, 10), season(2025, 16)], "2004-01-01", 2026)     # 26 games for two teams in one season
-    assert not awards.is_rookie([], "2000-09-15", 2026) and awards.is_rookie([], "2000-09-16", 2026)      # 26 on September 15
-    assert not awards.is_rookie(None, "2006-06-13", 2026)                                     # earlier seasons not read yet
-    assert awards.is_rookie([season(2026, 40)], "2006-06-13", 2026)                           # this season's own games do not count
-
-
-def test_the_awards_races():
-    table, games, boxes = small_season()
-    people = {"21": {"first": "David", "last": "Pastrnak", "born": "1996-05-25"}, "22": {"born": "2006-01-01"}}
-    rated = players.compute(table, games, boxes, people)
-    kept = {"21": {"seasons": [[2025, "Bruins", 82]]}, "22": {"seasons": []}, "23": {"seasons": [[2025, "Bruins", 70]]}}
-    races = awards.compute(rated, table, kept, people, {"22": 300}, {"BOS": "Marco Sturm"}, {"BOS": 0.2, "UTA": -0.2}, {"BOS": [2, 2], "UTA": [4, 2]}, 2026)
-    by = {r["key"]: r for r in races}
-    assert [r["key"] for r in races] == [a[0] for a in awards.ABOUT] and all(abs(sum(r.values()) - 1) < 1e-9 for r in awards.RECIPES.values())
-    ross = by["art_ross"]["rows"]
-    assert ross[0]["name"] == "David Pastrnak" and ross[0]["stats"][:3] == ["4 PTS", "2 G", "2 A"] and ross[0]["score"] is None and by["art_ross"]["counted"]
-    assert [r["id"] for r in ross][:3] == [21, 23, 22]                    # 4 points each: goals break the tie, then games, then the lower number
-    assert {r["id"] for r in by["richard"]["rows"]} == {21, 23, 11}        # only players with a goal
-    assert [r["id"] for r in by["norris"]["rows"]] == [23, 13] and [r["id"] for r in by["vezina"]["rows"]] == [24, 14]
-    assert [r["id"] for r in by["calder"]["rows"]] == [22]                 # the only one known to be in his first season
-    assert by["selke"]["rows"][0]["id"] == 22 and "5 min killing penalties" in by["selke"]["rows"][0]["stats"]
-    hart = by["hart"]["rows"]
-    assert hart[0]["team"] == "BOS" and 0 <= hart[-1]["score"] <= hart[0]["score"] <= 100 and len(hart) == 7
-    adams = by["adams"]["rows"]
-    assert adams[0]["name"] == "Marco Sturm" and adams[0]["sub"] == "Boston Bruins" and adams[1]["name"] == "Utah Mammoth" and adams[1]["sub"] is None
-    assert by["jennings"]["rows"][0]["team"] == "BOS" and by["jennings"]["rows"][0]["stats"][:2] == ["2 goals against", "1.00 a game"]
-    assert by["jennings"]["rows"][0]["name"] == "J. Swayman" and by["presidents"]["rows"][0]["stats"][0] == "4 PTS"
-    assert awards.expected_pct(0.0) == 0.5575 and awards.expected_pct(0.3) > awards.expected_pct(-0.3)
-    # who has moved since a week ago
-    snap = awards.snapshot(races)
-    assert snap["art_ross"][:2] == ["21", "23"] and snap["presidents"] == ["BOS", "UTA"]
-    awards.movement(races, {}, "2026-10-11")
-    assert "was" not in ross[0]
-    then = {"2026-10-02": {**snap, "art_ross": ["23", "21"], "presidents": ["UTA"]}, "2026-10-09": snap}
-    awards.movement(races, then, "2026-10-11")                             # nine days back is the nearest snapshot at least a week old
-    assert [r["was"] for r in ross][:3] == [2, 1, 0] and by["art_ross"]["since"] == "2026-10-02"
-    assert [r["was"] for r in by["presidents"]["rows"]] == [0, 1]
-
-
 # ----------------------------------------------------------------- the job --
 def test_which_box_scores_are_fetched():
-    done = {"status": "F", "full": True, "coach": {}, "adv": {"v": xg.model()["version"]}}
+    done = {"status": "F", "full": True, "adv": {"v": xg.model()["version"]}}
     games = [played(1, "2026-10-01", "A", "B", 1, 2), played(2, "2026-10-01", "A", "B", 1, 2), played(3, "2026-10-08", "A", "B", 1, 2),
              {**played(4, "2026-10-09", "A", "B", None, None), "state": "upcoming"}, played(5, "2026-10-01", "A", "B", 1, 2)]
     stored = {"1": done, "3": done, "5": {**done, "full": False}}
     want = run.boxes_wanted(games, stored, dt.date(2026, 10, 9))
     assert [g["id"] for g in want] == [2, 3, 5]       # not stored; recent, so read again for corrections; stored without its summary
-    stored["5"] = {"status": "F", "full": True, "coach": {}}        # stored before the play-by-play was read
+    stored["5"] = {"status": "F", "full": True}        # stored before the play-by-play was read
     assert [g["id"] for g in run.boxes_wanted(games, stored, dt.date(2026, 10, 9))] == [2, 3, 5]
 
 
@@ -568,7 +518,7 @@ def test_game_night_runs_only_work_when_a_game_is_on():
         games["1"].update(state="final")
         run.write_json(state / "schedule.json", {"season": 2026, "games": games})
         assert ids("2026-10-10T01:30") == [1]                       # over, but its box score is not in yet
-        run.write_json(state / "box.json", {"1": {"status": "F", "full": True, "coach": {}, "adv": {"v": xg.model()["version"]}}})
+        run.write_json(state / "box.json", {"1": {"status": "F", "full": True, "adv": {"v": xg.model()["version"]}}})
         assert ids("2026-10-10T01:30") == []
 
 
@@ -618,9 +568,6 @@ def test_the_site_is_built_from_what_is_stored():
         assert log["career"]["seasons"] == [[2025, "Bruins", 82, 40, 50, 90, 5, 20, 10, 30, 6, 250, 1100], [2026, "Bruins", 2, 2, 2, 4, 0, 0, 2, 2, 0, 4, 900]]
         assert log["career"]["total"][2:6] == [84, 42, 52, 94] and log["career"]["known"]
         assert json.loads((out / "player" / "11.json").read_text())["career"]["known"] is False
-        races = json.loads((out / "awards.json").read_text())
-        assert len(races["races"]) == 11 and races["through"] == "2026-10-10" and races["races"][1]["rows"][0]["id"] == 21
-        assert list(json.loads((state / "awards.json").read_text())) == ["2026-10-11"]
         combos = json.loads((out / "lines.json").read_text())["teams"]
         assert set(combos) == {"BOS", "UTA"} and combos["BOS"]["game"] == {"id": 2026020090, "date": "2026-10-10", "opp": "UTA", "home": 1}
         assert [g["id"] for g in combos["BOS"]["g"]] == [24] and combos["BOS"]["g"][0]["role"] == "start"
