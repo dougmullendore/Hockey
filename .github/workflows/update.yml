@@ -1,19 +1,18 @@
-name: Update data and site
+name: Update the site
 
-# Runs every night after the West Coast games finish, whenever the code
-# changes, and on demand from the Actions tab.
 on:
   schedule:
-    - cron: '23 10 * * *'   # 10:23 UTC = about 5:23am Central
+    - cron: '47 10 * * *'   # every morning, about 5:47am Central: schedule, standings, box scores, rosters
+    - cron: '47 16 * * *'   # every day about 11:47am Central: a second full refresh
+    - cron: '17 8 * * *'    # every night about 3:17am Central: a third, once the late games on the west coast are over
+    # game days (September to June): every 5 minutes from about 11am to 2am Central, for live
+    # scores and box scores. A run finds nothing to do and stops within seconds when no game is on.
+    - cron: '*/5 16-23 * 1-6,9-12 *'
+    - cron: '*/5 0-7 * 1-6,9-12 *'
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'pipeline/**'
-      - 'site/**'
-      - 'contracts/**'
-      - 'requirements.txt'
-      - '.github/workflows/update.yml'
+    paths: ['pipeline/**', 'site/**', 'ratings/**', 'tests/**', '.github/workflows/update.yml']
 
 concurrency:
   group: update
@@ -21,63 +20,80 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write      # to keep the schedule switched on (last step)
 
 jobs:
   update:
-    runs-on: ubuntu-latest
-    timeout-minutes: 240
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Get the stored data
+      - name: Get what was stored last time
         run: |
-          if git ls-remote --exit-code --heads "$REPO_URL" data >/dev/null 2>&1; then
-            git clone --quiet --depth 1 --branch data "$REPO_URL" data
+          if git ls-remote --exit-code --heads "$REPO_URL" state >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch state "$REPO_URL" state
           else
-            mkdir data && git -C data init -q -b data
+            mkdir state && git -C state init -q -b state
           fi
-          mkdir -p data/logs
+          mkdir -p state/logs
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-          cache: pip
 
-      - name: Install libraries
+      - name: Check the code
+        if: github.event_name != 'schedule'
+        run: python tests/run_local.py
+
+      - name: Update the schedule, standings and box scores, and build the page
+        env:
+          # the game-night runs only refresh games under way (see live_now in pipeline/run.py)
+          RUN_MODE: ${{ contains(github.event.schedule, '*/5') && 'live' || 'full' }}
         run: |
           set -o pipefail
-          pip install -r requirements.txt 2>&1 | tee data/logs/install.log
+          python -m pipeline.run state dist 2>&1 | tee "$RUNNER_TEMP/run.log"
+          if [ "$RUN_MODE" = live ]; then
+            if [ -f dist/index.html ]; then cp "$RUNNER_TEMP/run.log" state/logs/live_run.log; fi
+          else
+            cp "$RUNNER_TEMP/run.log" state/logs/last_run.log
+          fi
 
-      - name: Run the pipeline
-        run: |
-          set -o pipefail
-          python -m pipeline.run data dist 2>&1 | tee data/logs/last_run.log
-
-      - name: Save the data
+      - name: Save what was stored
         if: always()
         run: |
-          cd data
-          echo "${{ job.status }} $(date -u +%FT%TZ) ${GITHUB_SHA::12}" > logs/job_status.txt
+          cd state
+          if [ -z "$(git status --porcelain)" ]; then echo "nothing new to store"; exit 0; fi
           git config user.name "hockey-bot"
           git config user.email "hockey-bot@users.noreply.github.com"
           git add -A
           if git rev-parse -q --verify HEAD >/dev/null; then
-            git commit -q --amend -m "Data as of $(date -u +%F)" || true
+            git commit -q --amend -m "State as of $(date -u +%FT%TZ)" || true
           else
-            git commit -q -m "Data as of $(date -u +%F)"
+            git commit -q -m "State as of $(date -u +%FT%TZ)"
           fi
-          git push -q -f "$REPO_URL" HEAD:data
+          git push -q -f "$REPO_URL" HEAD:state
 
       - name: Publish the site
         if: always() && hashFiles('dist/index.html') != ''
         run: |
           cd dist
-          touch .nojekyll
           git init -q -b gh-pages
           git config user.name "hockey-bot"
           git config user.email "hockey-bot@users.noreply.github.com"
+          # Keep a copy of what is published, so the upload leaves out the files that have not
+          # changed. The new commit still has no history, so the branch does not grow over the season.
+          git fetch -q --depth 1 "$REPO_URL" +gh-pages:refs/remotes/published/gh-pages 2>/dev/null || true
           git add -A
-          git commit -q -m "Site build $(date -u +%F)"
+          git commit -q -m "Site build $(date -u +%FT%TZ)"
           git push -q -f "$REPO_URL" gh-pages
+
+      # GitHub turns off scheduled jobs after 60 days without activity in the
+      # repository (the off-season, say). Switching it on again each run resets that.
+      - name: Keep the schedule switched on
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/update.yml/enable" || echo "could not switch the schedule on; it may stop after 60 quiet days"

@@ -1,94 +1,68 @@
-"""Settings for the whole pipeline. Change things here, not in the other files."""
-
-import datetime as _dt
-
-# The first season the site covers. A season is named by its two years,
-# e.g. 20252026 is the 2025-26 season.
-FIRST_SEASON = 20212022
-
-
-def _seasons_through_today() -> list[int]:
-    today = _dt.datetime.now(_dt.timezone.utc).date()
-    last_start = today.year if today.month >= 9 else today.year - 1
-    first_start = FIRST_SEASON // 10000
-    return [y * 10000 + y + 1 for y in range(first_start, last_start + 1)]
-
-
-# Every season from FIRST_SEASON to the current one, oldest first. A new
-# season is picked up automatically each September.
-SEASONS = _seasons_through_today()
-
-# The expected-goals model is trained on this many of the newest completed
-# seasons, and retrains itself whenever another season finishes.
-XG_TRAIN_SEASON_COUNT = 5
-# Bump this to force the model to be retrained on the next run.
-XG_MODEL_VERSION = "xg-v3"
-# How the league's scorers record shots drifts from year to year, so recent
-# seasons count for more: each season back is worth this fraction of the next.
-XG_SEASON_DECAY = 0.5
-# While a season is young its xG is scaled toward last season's level; this
-# is how many expected goals of "benefit of the doubt" last season gets.
-XG_SCALE_PRIOR = 1500.0
-
-# --- WAR ---------------------------------------------------------------
-# Pull toward the prior, in hours of ice time (chosen by cross-validation).
-WAR_LAMBDA_EV = 20.0
-WAR_LAMBDA_PP = 5.0
-# A skater's rating starts each season at this fraction of last season's.
-WAR_PRIOR_FADE = 0.7
-# Finishing credit: goals above expected are multiplied by xG / (xG + K).
-WAR_FINISHING_K = 20.0
-# Fallback until there is a full season to measure it from.
-WAR_GOALS_PER_WIN = 6.0
-
-# --- Game predictions and season simulation ------------------------------
-# How fast team ratings forget: each game back counts this fraction of the next.
-PRED_CHANCES_DECAY = 0.97       # expected-goal difference (steady, so it can move fast)
-PRED_RESULTS_DECAY = 0.995      # goals beyond expected (noisy, so it moves slowly)
-# Games of "average team" mixed in before a rating is trusted.
-PRED_CHANCES_PRIOR = 20.0
-PRED_RESULTS_PRIOR = 80.0
-# Share of a rating's weight kept over the summer.
-PRED_SUMMER_FADE = 0.5
-# ...and how much of its distance from average a team keeps over the summer.
-PRED_SUMMER_REGRESS = 0.8
-# Doubt about each team's true strength in the season simulation (logit units).
-PRED_STRENGTH_DOUBT = 0.25
-PRED_SIMULATIONS = 10000
-
-# --- Money ------------------------------------------------------------------
-# Salary cap ceiling and league-minimum salary by season, in millions of US
-# dollars. Add a line when the league announces a new season's numbers; until
-# then the newest line is reused.
-SALARY_CAP = {
-    20212022: (81.5, 0.75), 20222023: (82.5, 0.75), 20232024: (83.5, 0.775),
-    20242025: (88.0, 0.775), 20252026: (95.5, 0.775), 20262027: (104.0, 0.85),
-}
-CAP_SPEND_SHARE = 0.95      # teams spend about this much of the ceiling on average
-ROSTER_SPOTS = 23
-
-# Game types: 2 = regular season, 3 = playoffs.
-GAME_TYPES = {2: "regular", 3: "playoffs"}
-
-# Games from the last few days are re-downloaded every night because the
-# league issues stat corrections after the final horn.
-REFRESH_DAYS = 3
-
-# Be polite to the NHL's servers.
-FETCH_THREADS = 6
-FETCH_RETRIES = 6
-USER_AGENT = "Mozilla/5.0 (compatible; hockey-stats-site/1.0)"
-
-API_WEB = "https://api-web.nhle.com/v1"
-API_STATS = "https://api.nhle.com/stats/rest/en"
-
-# Rink geometry (feet). The goal line is 89 ft from centre ice.
-GOAL_X = 89.0
+"""Every setting in one place."""
 
 SITE_NAME = "GOAT Hockey"
+LEAGUE = "NHL"
 
-# The companion newsletter. Its newest post titles are shown on the home page
-# and it gets a link in the menu. Set NEWSLETTER_URL to "" to remove both.
-NEWSLETTER_NAME = "Stars Spotlight"
-NEWSLETTER_URL = "https://starsspotlight.substack.com"
-SITE_TAGLINE = "NHL expected goals, goalie and team analytics"
+# The NHL's public feed (the one nhl.com itself uses).
+API = "https://api-web.nhle.com/v1/"
+GAME_PAGE = "https://www.nhl.com/gamecenter/"   # followed by the game's number
+PLAYER_PAGE = "https://www.nhl.com/player/"
+
+# A season is named by the year it starts in. Its games are looked for from
+# mid-September (the schedule's own regular-season start date decides what
+# counts) to the end of June. Before SEASON_FLIP (month, day) the newest
+# season is still last year's.
+SEASON_FLIP = (9, 1)
+SEASON_WEEKS_FROM = (9, 15)
+SEASON_WEEKS_TO = (6, 30)
+GAME_TYPES = (2, 3)           # 2 = regular season, 3 = playoffs; the preseason and all-star games are left out
+STATS_GAME_TYPES = (2,)       # player and team stats count the regular season only
+
+# Box scores this recent are fetched again: the league sends in corrections.
+BOX_REFRESH_DAYS = 2
+# Rosters (names, photos, height, weight, birthplace) are read again after this many days.
+ROSTER_REFRESH_DAYS = 1
+
+# Team logos and player photos are not stored here: the page shows them
+# straight from the NHL's own site. Set either to "" to show none.
+LOGO_URL = "https://assets.nhle.com/logos/nhl/svg/{team}_light.svg"
+SHOW_PHOTOS = True
+
+# Odds: each team's chance of winning, from this site's own ratings (see
+# pipeline/odds.py). These settings were chosen by testing on 2021-22 to
+# 2025-26 results.
+ODDS_STEP = 0.01          # how far a rating moves per surprising goal, early in the season
+ODDS_SETTLE = 20          # after about this many games the moves get smaller
+ODDS_MIN_STEP = 0.005     # and never smaller than this
+ODDS_KEEP = 0.8           # share of last season's rating a team starts with
+ODDS_HOME = 0.07          # home ice, in the same units as a rating
+ODDS_STRETCH = 2.0        # turns an expected share of the goals into a chance of winning
+ODDS_MARGIN_CAP = 4       # a win by more than this many goals counts as this many
+ODDS_TESTED = {"games": 5592, "favorite_won": 0.580, "home_won": 0.535, "seasons": "2022-23 to 2025-26",
+               "given": "60 to 70%", "won": 0.65}
+
+# The GOAT ranking (pipeline/goat.py) of the 32 teams: head to head first,
+# then strength of schedule, the standings and record, in that order.
+GOAT_WEIGHTS = (0.5, 0.3, 0.2)   # strength of schedule, place in the standings, record
+GOAT_HEAD_TO_HEAD = 0.15  # a head-to-head lead outweighs a score gap up to this size (scores run 0 to 1)
+GOAT_REACH = 40           # how far up or down the order one move can take a team
+GOAT_TOP = 10             # the Beat and Lost to boxes list results against this many top teams
+
+# Where to watch: the channels the league lists for each game. Networks in
+# these countries are shown, national ones first.
+WATCH_COUNTRIES = ("US", "CA")
+WATCH_MAX = 4
+
+# While a game is being played, the page itself re-reads ESPN's public
+# scoreboard this often (in seconds) and shows the score as it changes. The
+# NHL's own feed cannot be read by a web page, only by the job.
+LIVE_SECONDS = 15
+ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?limit=100&dates="
+# ESPN's short names for teams where they differ from the NHL's.
+ESPN_ABBR = {"TB": "TBL", "SJ": "SJS", "LA": "LAK", "NJ": "NJD", "UTAH": "UTA", "VEG": "VGK", "WAS": "WSH", "MON": "MTL",
+             "CLB": "CBJ", "NAS": "NSH", "WIN": "WPG", "CAL": "CGY", "FLO": "FLA"}
+
+# Be polite to the servers.
+FETCH_THREADS = 6
+FETCH_RETRIES = 4
+USER_AGENT = "Mozilla/5.0 (compatible; goat-hockey-stats-site/2.0; +https://github.com/dougmullendore/Hockey)"

@@ -3,8 +3,3 @@ __pycache__/
 /out/
 /data/
 .venv/
-
-# contract look-up working files (only cap_hits.csv and info.json are published)
-/contracts/*
-!/contracts/cap_hits.csv
-!/contracts/info.json

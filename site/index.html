@@ -3,54 +3,86 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GOAT Hockey</title>
-<meta name="description" content="NHL expected goals, goalie, skater and team analytics, updated every night.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 28 28%22%3E%3Crect width=%2228%22 height=%2228%22 rx=%225%22 fill=%22%23fff%22/%3E%3Cpath d=%22M11.2 9.6C10.6 5.4 7.6 2.4 2.6 3.2c3.2.9 4.6 3.2 5 6.8%22 fill=%22%23c4122f%22/%3E%3Cpath d=%22M16.8 9.6C17.4 5.4 20.4 2.4 25.4 3.2c-3.2.9-4.6 3.2-5 6.8%22 fill=%22%23c4122f%22/%3E%3Cpath d=%22M8.6 11.2 2.4 12.6c1.4 2.3 3.8 3.1 6.6 2.3zM19.4 11.2l6.2 1.4c-1.4 2.3-3.8 3.1-6.6 2.3z%22 fill=%22%2313212c%22/%3E%3Cpath d=%22M14 8.2c-3.2 0-5.6 1.3-5.6 3.6 0 3 1.1 5.2 1.9 8.1.6 2.2 1.9 3.6 3.7 3.6s3.1-1.4 3.7-3.6c.8-2.9 1.9-5.1 1.9-8.1 0-2.3-2.4-3.6-5.6-3.6z%22 fill=%22%2313212c%22/%3E%3Cpath d=%22M12.6 23.2 14 27.4l1.4-4.200z%22 fill=%22%2313212c%22/%3E%3Cpath d=%22M10.3 13.900h2.3v1.3h-2.3zM15.4 13.900h2.3v1.3h-2.3z%22 fill=%22%23fff%22/%3E%3Cpath d=%22M12.9 20.3h2.200L14 21.5z%22 fill=%22%23fff%22/%3E%3C/svg%3E">
+<title>GOAT Hockey: NHL games</title>
+<meta name="description" content="Every NHL game, week by week, with each team's chance of winning, where to watch, live scores, standings, team stats and a card for every player.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-title" content="GOAT Hockey">
+<meta name="theme-color" content="#0e7490">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<a class="skip" href="#main">Skip to content</a>
-<header class="masthead">
-  <div class="wrap masthead-row">
-    <a class="brand" href="#/" aria-label="GOAT Hockey, home">
-      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
-        <path d="M11.2 9.6C10.6 5.4 7.6 2.4 2.6 3.2c3.2.9 4.6 3.2 5 6.8" fill="var(--red)"/>
-        <path d="M16.8 9.6C17.4 5.4 20.4 2.4 25.4 3.2c-3.2.9-4.6 3.2-5 6.8" fill="var(--red)"/>
-        <path d="M8.6 11.2 2.4 12.6c1.4 2.3 3.8 3.1 6.6 2.3zM19.4 11.2l6.2 1.4c-1.4 2.3-3.8 3.1-6.6 2.3z" fill="var(--ink)"/>
-        <path d="M14 8.2c-3.2 0-5.6 1.3-5.6 3.6 0 3 1.1 5.2 1.9 8.1.6 2.2 1.9 3.6 3.7 3.6s3.1-1.4 3.7-3.6c.8-2.9 1.9-5.1 1.9-8.1 0-2.3-2.4-3.6-5.6-3.6z" fill="var(--ink)"/>
-        <path d="M12.6 23.2 14 27.4l1.4-4.200z" fill="var(--ink)"/>
-        <path d="M10.3 13.900h2.3v1.3h-2.3zM15.4 13.900h2.3v1.3h-2.3z" fill="var(--sheet)"/>
-        <path d="M12.9 20.3h2.200L14 21.5z" fill="var(--sheet)"/>
-      </svg>
-      <span id="brand-name">GOAT Hockey</span>
-    </a>
-    <nav class="nav" aria-label="Sections">
-      <a href="#/games" data-route="games">Games</a>
-      <a href="#/standings" data-route="standings">Standings</a>
-      <a href="#/war" data-route="war">WAR</a>
-      <a href="#/cards" data-route="cards">Cards</a>
-      <a href="#/contracts" data-route="contracts" hidden>Contracts</a>
-      <a href="#/goalies" data-route="goalies">Goalies</a>
-      <a href="#/skaters" data-route="skaters">Skaters</a>
-      <a href="#/lines" data-route="lines">Lines</a>
-      <a href="#/teams" data-route="teams">Teams</a>
-      <a href="#/about" data-route="about">About</a>
-      <a id="nav-news" class="ext" target="_blank" rel="noopener" hidden></a>
+<a class="skip" href="#games">Skip to the games</a>
+<header class="mast">
+  <div class="wrap mast-row">
+    <a class="brand" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5l9.2 13.2c.7 1 1.6 1.5 2.8 1.5h3.5"/><path d="M18 2.5L8.8 15.7c-.7 1-1.6 1.5-2.8 1.5H2.5"/><ellipse cx="12" cy="21.3" rx="2.7" ry="1.1"/></svg><span id="brand">GOAT Hockey</span></a>
+    <nav class="pages" aria-label="Pages">
+      <a href="#/" data-page="games" data-w="nav.games">Games</a>
+      <a href="#/standings" data-page="standings" data-w="nav.standings">Standings</a>
+      <a href="#/teams" data-page="teams" data-w="nav.teams">Teams</a>
+      <a href="#/players" data-page="players" data-w="nav.players">Players</a>
     </nav>
   </div>
 </header>
-<main id="main" class="wrap" tabindex="-1">
-  <p class="loading">Loading the numbers…</p>
+<main class="wrap">
+  <section id="page-games">
+    <h1 data-w="games.title">NHL Games</h1>
+    <p class="lede" data-w="games.lede">Every NHL game, week by week.</p>
+    <p class="livenote" id="live-note" role="status" hidden></p>
+    <div id="games" tabindex="-1">
+      <div class="bar">
+        <h2 id="h-list">Loading the games…</h2>
+        <div class="nav" id="nav"></div>
+      </div>
+      <div id="list"></div>
+    </div>
+  </section>
+
+  <section id="page-standings" hidden>
+    <h1 data-w="standings.title">NHL Standings</h1>
+    <p class="lede" id="rank-lede"></p>
+    <div class="nav filters" id="rank-sort"></div>
+    <div id="stand"></div>
+    <p class="note" id="rank-note"></p>
+    <p class="note" id="goat-note"></p>
+  </section>
+
+  <section id="page-teams" hidden>
+    <h1 data-w="teams.title">NHL Team Stats</h1>
+    <p class="lede" data-w="teams.lede">How each team scores, shoots, defends and plays special teams, per game. From official box scores.</p>
+    <div id="t-list"></div>
+  </section>
+
+  <section id="page-players" hidden>
+    <h1 data-w="players.title">NHL Players</h1>
+    <p class="lede" data-w="players.lede">Every regular in the NHL, ranked by Impact per game.</p>
+    <div class="nav filters" id="p-filters"></div>
+    <div id="p-list"></div>
+  </section>
+
+  <section id="page-team" hidden>
+    <div id="team"></div>
+  </section>
+
+  <section id="page-game" hidden>
+    <p class="back"><a href="#/" data-w="game.back">All games</a></p>
+    <div id="game"></div>
+  </section>
+
+  <section id="page-card" hidden>
+    <p class="back"><a href="#/players" data-w="players.back">All players</a></p>
+    <div id="card"></div>
+  </section>
 </main>
 <footer class="wrap foot">
   <p id="foot-updated"></p>
-  <p id="foot-news" hidden></p>
-  <p>Built from the NHL's public game feeds. Not affiliated with or endorsed by the NHL or any team.</p>
+  <p data-w="footer.about">Game times are shown in your own time zone.</p>
 </footer>
-<div id="tip" class="tip" role="status" hidden></div>
 <script src="app.js"></script>
 </body>
 </html>

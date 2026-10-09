@@ -1,0 +1,79 @@
+# THE WORDS ON THE SITE
+#
+# Each line is:   name = the words shown on the site
+# Change only the words after the = sign. Keep the name before it exactly as it is.
+# Lines starting with # are notes for you; the site ignores them.
+# A word in curly brackets, like {date} or {n}, is filled in by the site
+# (a date, a number). You can move it or leave it out.
+# After you save, the site updates in about two minutes. If a line is broken,
+# the update stops, the old site stays up, and GitHub emails you.
+
+# ---- the tabs at the top ----
+nav.games = Games
+nav.standings = Standings
+nav.teams = Teams
+nav.players = Players
+
+# ---- Games page ----
+games.title = NHL Games
+games.lede = Every NHL game, week by week: each team's chance of winning, where to watch, and the score as it happens.
+games.all_teams = All 32 teams
+games.earlier = Earlier week
+games.this_week = This week
+games.later = Later week
+games.no_broadcast = No broadcast listed
+games.box_score = Box score
+games.live_box_score = Live box score
+games.live = Live
+games.away = Away
+games.home = Home
+games.note = The visiting team is on the left, and the channel or streaming service is on the right. The number beside each team is its place in the league standings today, also for earlier weeks. Choose a team to see its whole season.
+games.odds_note = Percentages are each team's chance of winning, from this site's own ratings of results, opponents and home ice; they are not betting lines.
+games.live_note = Live scores from ESPN, refreshed every {seconds} seconds.
+
+# ---- Standings page ----
+standings.title = NHL Standings
+standings.lede = The league's own standings, as of {date}.
+standings.lede_goat = This site's own ranking of the 32 teams: head to head first, then strength of schedule, place in the standings and record.
+standings.button_division = Division
+standings.button_wildcard = Wild Card
+standings.button_conference = Conference
+standings.button_league = League
+standings.button_goat = GOAT Ranking
+standings.beat = Beat
+standings.lost_to = Lost to
+standings.none_yet = None yet
+standings.note = Two points for a win, one for a loss in overtime or a shootout. Teams level on points are separated the league's way: fewer games played, then regulation wins. Hold or hover over a column heading for what it means; choose a team to see its page.
+standings.note_line = The line marks the playoff places: the top three in each division, and the two best of the rest in each conference as wild cards.
+standings.note_goat = Beside each team are its results this season against the GOAT top {n}, with their GOAT places. The League column is the team's place in the standings. Redone after every game.
+standings.note_goat_how = Every team is ranked on four things, most important first: head to head, strength of schedule (the average rating of the teams played), its place in the standings, and its record. A team is ranked above one it leads in their season series unless the other three say the gap is wide. The standings rank a team below one it leads head to head {standings} times; the GOAT ranking does {goat} times.
+
+# ---- Teams page ----
+teams.title = NHL Team Stats
+teams.lede = How each team scores, shoots, defends and plays special teams, per game, from official box scores.
+teams.note = Rating is where this site's rating of results (the one behind the odds) places the team; SOS ranks the 32 by how strong their opponents have been. Choose a column heading to sort; hold or hover over a heading for what it means.
+
+# ---- a team's own page ----
+team.games = Games
+team.coming_up = Coming up
+team.latest_results = Latest results
+team.stats = Team Stats
+team.players = Players
+team.players_note = # is his rank by Impact per game among all regular skaters in the league (goalies are ranked among goalies); part-time players are greyed and not ranked. Choose a name for his card.
+team.versus_note = Results this season against the GOAT top {n}, with their GOAT places.
+
+# ---- Players page ----
+players.title = NHL Players
+players.lede = Every regular in the NHL, ranked by Impact per game: the points he adds per game over an average player at his position.
+players.note = Impact is a box-score rating: a goal is worth 0.75, a first assist 0.70, a second assist 0.55, a shot on goal 0.075, a blocked shot 0.05, a takeaway 0.03 (a giveaway costs the same), a minor penalty drawn 0.15 (one taken costs the same) and each goal of plus-minus 0.15. A player's total is compared with what an average forward or defenseman would have in the same ice time. It cannot see shot quality or who else was on the ice, and it does not adjust for the opponent. Early in the season a few games can move a player a long way.
+players.note_goalies = A goalie's Impact is the goals he saved beyond what an average goalie would have on the same shots (at even strength, against the power play and shorthanded), at 0.75 a goal. It cannot see shot quality. Early in the season a game or two can move a goalie a long way.
+players.back = All players
+players.nhl_link = His page on NHL.com
+
+# ---- a game's own page ----
+game.back = All Games
+game.note = During a game the score comes from ESPN and updates every 15 seconds; player stats come from the NHL's box score and are refreshed about every 5 minutes. A dark edge marks the defensemen.
+game.nhl_link = This game on NHL.com
+
+# ---- bottom of every page ----
+footer.about = Game times are shown in your own time zone. Schedules, scores, standings, channels and box scores come from the NHL's public feed, and scores of games in progress from ESPN's. Channels can change, so check before you tune in; streaming services need their own subscription. Chances of winning, the GOAT ranking and player ratings are worked out by this site. Team logos and player photos belong to the NHL and its teams and are shown from the league's own site. Not affiliated with or endorsed by the NHL or any team.
