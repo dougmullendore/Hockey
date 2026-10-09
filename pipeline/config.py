@@ -51,6 +51,21 @@ ODDS_MARGIN_CAP = 4       # a win by more than this many goals counts as this ma
 ODDS_TESTED = {"games": 5592, "favorite_won": 0.580, "home_won": 0.535, "seasons": "2022-23 to 2025-26",
                "given": "60 to 70%", "won": 0.65}
 
+# Playoff odds (pipeline/playoffs.py): the rest of the season and the playoffs
+# are played out this many times. The two SPREAD settings were chosen by
+# testing on 2022-23 to 2025-26 (see PLAYOFF_TESTED and the README).
+PLAYOFF_SIMS = 10000
+PLAYOFF_WORLDS = 500          # of which this many start from a different guess at how good each team really is
+PLAYOFF_OT_RATE = 0.222       # share of games that go past regulation (6,560 games, 2021-22 to 2025-26)
+PLAYOFF_SO_SHARE = 0.326      # share of those that reach a shootout
+PLAYOFF_OT_EDGE = 0.25        # how much of the favorite's edge is left past regulation
+PLAYOFF_SPREAD_START = 0.12   # how unsure a rating is before a game is played (one standard deviation, in rating units)
+PLAYOFF_SPREAD_END = 0.03     # and at the end of the season
+PLAYOFF_GAP_KEPT = 1.0        # share of the gap between two teams' ratings that counts in a playoff series
+PLAYOFF_DAYS_KEPT = 300       # days of playoff chances kept, to show who has moved
+PLAYOFF_TESTED = {"seasons": "2022-23 to 2025-26", "checks": 896,       # 32 teams, at seven points in each of four seasons
+                  "low": ["under 20%", 0.08], "mid": ["40 to 60%", 0.48], "high": ["60 to 80%", 0.68], "top": ["over 80%", 0.94]}
+
 # The GOAT ranking (pipeline/goat.py) of the 32 teams: each team's place among
 # the 32 on these four things, weighted like this, plus a boost for a hot streak.
 GOAT_WEIGHTS = {"record": 0.30, "sos": 0.15, "xg": 0.30, "goals": 0.25}

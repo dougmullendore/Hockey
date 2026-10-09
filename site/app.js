@@ -151,6 +151,80 @@
     $("rank-note").textContent = W("standings.note") + (standView === "wildcard" || standView === "division" ? " " + W("standings.note_line") : "");
   }
 
+  // ---- playoff odds: each team's chance of the playoffs, each round and the Cup ----
+  var oddsView = "league", oddsSort = "playoffs", oddsDir = -1;
+  function share(v) { return v == null ? "" : v <= 0 ? "0%" : v >= 1 ? "100%" : v < 0.001 ? "<0.1%" : v > 0.999 ? ">99.9%" : (v * 100).toFixed(1) + "%"; }
+  var ODDS = [
+    ["playoffs", "Playoffs", "Chance of making the playoffs"],
+    ["week", "Week", "How far the chance of the playoffs has moved in seven days, in percentage points"],
+    ["r2", "2nd Round", "Chance of winning a first-round series"],
+    ["r3", "Conf. Final", "Chance of reaching the conference final, the third round"],
+    ["final", "Cup Final", "Chance of reaching the Stanley Cup Final"],
+    ["cup", "Win Cup", "Chance of winning the Stanley Cup"],
+    ["points", "Points", "Points at the end of the regular season, on average"],
+    ["d1", "1st in Div.", "Chance of finishing first in its division"],
+    ["d2", "2nd", "Chance of finishing second in its division"],
+    ["d3", "3rd", "Chance of finishing third in its division"],
+    ["wc1", "WC1", "Chance of being the first wild card"],
+    ["wc2", "WC2", "Chance of being the second wild card"]];
+  function oddsOf(t, key) { var o = t.po || {}; return key === "week" ? (o.was == null || o.playoffs == null ? null : o.playoffs - o.was) : o[key]; }
+  function oddsTable(rows, label) {
+    var week = rows.some(function (t) { return oddsOf(t, "week") != null; });
+    var cols = ODDS.filter(function (c) { return c[0] !== "week" || week; });
+    rows.sort(function (a, b) {
+      var x = oddsOf(a, oddsSort), y = oddsOf(b, oddsSort);
+      return (x == null) - (y == null) || oddsDir * ((x || 0) - (y || 0)) || (b.po.playoffs || 0) - (a.po.playoffs || 0) || a.rank - b.rank;
+    });
+    var thead = el("thead", {}, [el("tr", {}, [el("th", { scope: "col", text: "#" }), el("th", { scope: "col", "class": "l", text: label })]
+      .concat(cols.map(function (c) {
+        var on = oddsSort === c[0];
+        return el("th", { scope: "col", title: c[2], "aria-sort": on ? (oddsDir < 0 ? "descending" : "ascending") : null }, [
+          el("button", { type: "button", "class": "sortbtn" + (on ? " on" : ""), text: c[1] + (on ? (oddsDir < 0 ? " ▼" : " ▲") : ""),
+            onclick: function () { if (on) oddsDir = -oddsDir; else { oddsSort = c[0]; oddsDir = -1; } drawOdds(); } })]);
+      })))]);
+    var body = el("tbody", {}, rows.map(function (t, i) {
+      return el("tr", {}, [el("td", {}, [el("span", { "class": "rk", text: String(i + 1) })]),
+        el("td", { "class": "l" }, [el("span", { "class": "tcell" }, [logo(t.id), teamA(t.id, t.name), t.clinch ? el("small", { "class": "clinch", text: " " + t.clinch }) : null])])]
+        .concat(cols.map(function (c) {
+          var v = oddsOf(t, c[0]);
+          if (c[0] === "points") return el("td", { text: v == null ? "" : v.toFixed(1) });
+          if (c[0] === "week") {
+            var pts = v == null ? null : Math.round(v * 1000) / 10;
+            return el("td", { "class": pts > 0 ? "up" : pts < 0 ? "down" : "", text: pts == null ? "" : pts === 0 ? "–" : (pts > 0 ? "+" : "−") + Math.abs(pts).toFixed(1) });
+          }
+          var td = el("td", { "class": "heat" + (c[0] === "playoffs" || c[0] === "cup" ? " strong" : ""), text: share(v) });
+          td.style.setProperty("--heat", String(Math.round(Math.sqrt(Math.max(0, v || 0)) * 100) / 100));
+          return td;
+        })));
+    }));
+    return el("div", { "class": "tablewrap", tabindex: "0", role: "region", "aria-label": label + " playoff odds, scrolls sideways" }, [el("table", { "class": "ptable stand otable" }, [thead, body])]);
+  }
+  function drawOdds() {
+    var holder = $("odds"), bar = $("odds-view"), info = data.playoffs || {}, tested = info.tested || {};
+    holder.innerHTML = ""; bar.innerHTML = "";
+    $("odds-lede").textContent = W("odds.lede", { sims: (info.sims || 0).toLocaleString() });
+    var teams = data.teams.filter(function (t) { return t.po && t.po.playoffs != null; });
+    if (!teams.length) { holder.appendChild(el("p", { "class": "empty", text: W("odds.none") })); $("odds-note").textContent = ""; $("odds-test").textContent = ""; return; }
+    [["league", W("odds.button_league")], ["conference", W("odds.button_conference")], ["division", W("odds.button_division")]].forEach(function (o) {
+      bar.appendChild(el("button", { type: "button", "aria-pressed": String(oddsView === o[0]), text: o[1], onclick: function () { oddsView = o[0]; drawOdds(); } }));
+    });
+    if (oddsView === "league") holder.appendChild(oddsTable(teams, "Team"));
+    else if (oddsView === "conference") groups("conf").forEach(function (c) {
+      holder.appendChild(el("h3", { "class": "day", text: c + " Conference" }));
+      holder.appendChild(oddsTable(teams.filter(function (t) { return t.conf === c; }), c));
+    });
+    else groups("conf").forEach(function (c) {
+      groups("div").filter(function (d) { return teams.some(function (t) { return t.conf === c && t.div === d; }); }).forEach(function (d) {
+        holder.appendChild(el("h3", { "class": "day", text: d + " Division" }));
+        holder.appendChild(oddsTable(teams.filter(function (t) { return t.div === d; }), d));
+      });
+    });
+    function whole(x) { return Math.round(x * 100) + "%"; }
+    $("odds-note").textContent = W("odds.note");
+    $("odds-test").textContent = tested.high ? W("odds.tested", { seasons: tested.seasons, high_range: tested.high[0], high: whole(tested.high[1]),
+      top_range: tested.top[0], top: whole(tested.top[1]), low_range: tested.low[0], low: whole(tested.low[1]) }) : "";
+  }
+
   // ---- one game ----
   // [away, home] chances as whole percentages that add up to 100; never shown as 0 or 100
   function pct(home) { var n = Math.min(99, Math.max(1, Math.round(home * 100))); return [(100 - n) + "%", n + "%"]; }
@@ -1067,18 +1141,18 @@
   function route() {
     var h = location.hash, card = /^#\/?player\/(\d+)/.exec(h), game = /^#\/?game\/(\d+)/.exec(h), tm = /^#\/?team\/(.+)$/.exec(h), ln = /^#\/?lines(?:\/(.+))?$/.exec(h);
     stopGame();
-    var page = tm ? "team" : game ? "game" : card ? "card" : ln ? "lines" : /^#\/?players/.test(h) ? "players" : /^#\/?standings/.test(h) ? "standings" : /^#\/?teams/.test(h) ? "teams" : "games";
-    ["games", "standings", "teams", "players", "lines", "card", "game", "team"].forEach(function (p) { $("page-" + p).hidden = p !== page; });
+    var page = tm ? "team" : game ? "game" : card ? "card" : ln ? "lines" : /^#\/?odds/.test(h) ? "odds" : /^#\/?players/.test(h) ? "players" : /^#\/?standings/.test(h) ? "standings" : /^#\/?teams/.test(h) ? "teams" : "games";
+    ["games", "standings", "teams", "players", "lines", "odds", "card", "game", "team"].forEach(function (p) { $("page-" + p).hidden = p !== page; });
     Array.prototype.forEach.call(document.querySelectorAll(".pages a"), function (a) {
       if (a.dataset.page === (page === "card" ? "players" : page === "game" ? "games" : page === "team" ? "teams" : page)) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    document.title = ({ standings: W("standings.title"), teams: W("teams.title"), players: W("players.title"), lines: W("lines.title"), game: W("games.box_score"), team: "Team", card: "Player card" }[page] || W("games.title")) + " | " + data.site;
+    document.title = ({ standings: W("standings.title"), teams: W("teams.title"), players: W("players.title"), lines: W("lines.title"), odds: W("odds.title"), game: W("games.box_score"), team: "Team", card: "Player card" }[page] || W("games.title")) + " | " + data.site;
     if (page === "lines") {
       var remembered = null;
       try { remembered = localStorage.getItem("lines-team"); } catch (e) {}
       if (!ln[1] && remembered && T(remembered)) { location.replace("#/lines/" + remembered); return; }
       drawLines(ln[1] ? decodeURIComponent(ln[1]) : null);
-    } else if (page === "team") drawTeam(decodeURIComponent(tm[1])); else if (page === "game") drawGame(game[1]); else if (page === "standings") drawStandings(); else if (page === "teams") drawTeams(); else if (page === "players") drawPlayers(); else if (page === "card") drawCard(card[1]); else draw();
+    } else if (page === "team") drawTeam(decodeURIComponent(tm[1])); else if (page === "game") drawGame(game[1]); else if (page === "standings") drawStandings(); else if (page === "odds") drawOdds(); else if (page === "teams") drawTeams(); else if (page === "players") drawPlayers(); else if (page === "card") drawCard(card[1]); else draw();
     window.scrollTo(0, 0);
   }
 

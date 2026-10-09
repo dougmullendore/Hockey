@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pipeline import careers, config, goat, lines, nhl, odds, players, run, teams, xg
+from pipeline import careers, config, goat, lines, nhl, odds, players, playoffs, run, teams, xg
 
 FIX = Path(__file__).parent / "fixtures"
 UTC = dt.timezone.utc
@@ -583,8 +583,94 @@ def test_the_site_is_built_from_what_is_stored():
         assert len(json.loads((out / "players.json").read_text())["players"]) == 7
         page = (out / "index.html").read_text()
         assert "app.js?v=" in page and "styles.css?v=" in page and (out / ".nojekyll").exists() and not (out / "words.txt").exists()
+        assert bos["po"]["playoffs"] == 1.0 and bos["po"]["points"] >= 4 and "was" not in bos["po"] and data["playoffs"]["sims"] == config.PLAYOFF_SIMS
+        kept = json.loads((state / "playoffs.json").read_text())
+        assert list(kept["days"]) == ["2026-10-11"] and kept["odds"]["UTA"]["d1"] + kept["odds"]["UTA"]["d2"] == 1.0
         ratings = json.loads((state / "ratings.json").read_text())
         assert set(ratings) == {"2026"} and ratings["2026"]["BOS"] > ratings["2026"]["UTA"]
+
+
+# ----------------------------------------------------------- playoff odds --
+def league(n_div=4, per=8):
+    """A made-up league: two conferences of two divisions, eight teams in each."""
+    return [{"id": f"T{d}{i}", "conf": "East" if d < n_div // 2 else "West", "div": f"D{d}"} for d in range(n_div) for i in range(per)]
+
+
+def test_a_playoff_series_and_how_a_game_ends():
+    assert abs(playoffs.series_chance(0.5, 0.5) - 0.5) < 1e-12
+    assert abs(playoffs.series_chance(0.6, 0.6) - 0.7102) < 1e-4              # the textbook figure for 60% a game
+    assert playoffs.series_chance(0.6, 0.5) > playoffs.series_chance(0.55, 0.55) > 0.5   # four of the seven are at home
+    for p in (0.2, 0.5, 0.8):
+        a, b, c, d, e = playoffs.cuts(p)
+        assert 0 <= a <= b <= c <= d <= e <= 1 and abs(1 - b - config.PLAYOFF_OT_RATE) < 1e-12
+        assert abs(a + (d - b) - p) < 1e-12                                       # the home team still wins p of the time
+        assert abs((d - c) / (d - b) - config.PLAYOFF_SO_SHARE) < 1e-9
+    assert playoffs.spread(0, 84) == config.PLAYOFF_SPREAD_START and playoffs.spread(84, 84) == config.PLAYOFF_SPREAD_END
+    assert playoffs.spread(0, 84) > playoffs.spread(42, 84) > playoffs.spread(84, 84)
+
+
+def test_standings_from_results():
+    games = [played(1, "2026-10-10", "A", "B", 1, 3), played(2, "2026-10-11", "A", "B", 3, 2, end="OT"), played(3, "2026-10-12", "B", "A", 1, 2, end="SO")]
+    s = playoffs.standing(games, ["A", "B"])
+    assert s["A"] == 4 * playoffs.PT + 1 * playoffs.ROW + 2 * playoffs.W           # two wins, neither in regulation
+    assert s["B"] == 4 * playoffs.PT + playoffs.RW + playoffs.ROW + playoffs.W     # a regulation win and two overtime losses
+    assert s["B"] > s["A"]                                                           # level on points: regulation wins decide
+
+
+def test_playoff_odds_add_up():
+    table = league()
+    ids = [t["id"] for t in table]
+    games, n = [], 0
+    for i, h in enumerate(ids):                       # everyone hosts everyone else once; nothing played yet
+        for a in ids:
+            if a != h:
+                n += 1
+                games.append({**played(n, "2026-11-01", a, h, None, None), "state": "upcoming"})
+    rating = {t: 0.3 - 0.08 * (i % 8) for i, t in enumerate(ids)}       # the same eight strengths in every division
+    out = playoffs.simulate(table, games, rating, sims=400, seed=3)
+    total = {k: sum(v[k] for v in out.values()) for k in out[ids[0]]}
+    assert [round(total[k], 6) for k in ("playoffs", "r2", "r3", "final", "cup", "d1", "d2", "d3", "wc1", "wc2")] == [16, 8, 4, 2, 1, 4, 4, 4, 2, 2]
+    assert abs(total["points"] - len(games) * (2 + config.PLAYOFF_OT_RATE)) < 0.02 * len(games)
+    best, worst = out[ids[0]], out[ids[7]]
+    assert best["playoffs"] > 0.8 > 0.2 > worst["playoffs"] and best["cup"] > worst["cup"] and best["points"] > worst["points"]
+    for v in out.values():
+        assert abs(v["playoffs"] - (v["d1"] + v["d2"] + v["d3"] + v["wc1"] + v["wc2"])) < 1e-9
+        assert v["playoffs"] >= v["r2"] >= v["r3"] >= v["final"] >= v["cup"]
+    assert playoffs.simulate(table, games, rating, sims=400, seed=3) == out      # the same every time for the same inputs
+
+
+def test_a_finished_season_leaves_nothing_to_chance():
+    table = league()
+    ids = [t["id"] for t in table]
+    games = [played(n, "2027-04-01", a, h, 1, 3 if hi < ai else 0) for n, (hi, h, ai, a) in
+             enumerate((hi, h, ai, a) for hi, h in enumerate(ids) for ai, a in enumerate(ids) if a != h)]
+    out = playoffs.simulate(table, games, {t: 0.0 for t in ids}, sims=50)
+    for d in range(4):                                # in each division the first three are in, and stay in that order
+        assert [out[f"T{d}{i}"]["d1"] for i in range(3)] == [1, 0, 0] and out[f"T{d}2"]["d3"] == 1
+        assert out[f"T{d}7"]["playoffs"] == 0
+    assert out["T03"]["wc1"] == 1 and out["T04"]["wc2"] == 1 and out["T13"]["playoffs"] == 0      # the better division's fourth and fifth
+    assert out["T00"]["points"] == 2 * 31 + 2 * 31
+
+
+def test_playoff_odds_are_only_worked_out_again_when_something_changes():
+    table = league(per=4)
+    ids = [t["id"] for t in table]
+    games = [{**played(n, "2026-11-01", a, h, None, None), "state": "upcoming"} for n, (a, h) in enumerate((a, h) for a in ids for h in ids if a != h)]
+    rating = {t: 0.0 for t in ids}
+    old = config.PLAYOFF_SIMS
+    config.PLAYOFF_SIMS = 100
+    try:
+        first = playoffs.update({}, table, games, rating, "2026-10-01")
+        marked = {**first, "odds": {t: {**v, "mark": 1} for t, v in first["odds"].items()}}
+        again = playoffs.update(marked, table, games, rating, "2026-10-09")
+        assert again["odds"][ids[0]].get("mark") == 1 and list(again["days"]) == ["2026-10-01", "2026-10-09"]     # nothing changed: kept
+        games[0] = played(0, "2026-11-01", games[0]["away"]["id"], games[0]["home"]["id"], 2, 1)
+        fresh = playoffs.update(again, table, games, rating, "2026-10-10")
+        assert "mark" not in fresh["odds"][ids[0]] and fresh["key"] != again["key"]
+        assert playoffs.week_ago(fresh["days"], "2026-10-10") == first["days"]["2026-10-01"]
+        assert playoffs.week_ago(fresh["days"], "2026-10-05") == {} and playoffs.week_ago({}, "2026-10-05") == {}
+    finally:
+        config.PLAYOFF_SIMS = old
 
 
 def test_the_page_script_has_no_syntax_errors():

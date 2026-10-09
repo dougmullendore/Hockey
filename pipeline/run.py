@@ -16,6 +16,7 @@ Usage:  python -m pipeline.run <state_dir> <site_output_dir>
   careers.json     players' earlier NHL seasons, from each player's own page
   lines.json       who was on the ice together in each game, from the shift charts
   ratings.json     every team's rating, this season and last (behind the odds)
+  playoffs.json    the playoff odds as last worked out, and each day's playoff chances
   status.json      what happened on the last run
 """
 from __future__ import annotations
@@ -30,7 +31,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import careers, config, goat, lines, nhl, odds, players, teams, web, xg
+from . import careers, config, goat, lines, nhl, odds, players, playoffs, teams, web, xg
 
 SITE_SRC = Path(__file__).resolve().parents[1] / "site"
 
@@ -432,6 +433,18 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         elif g["id"] in pregame:
             g["p0"] = round(pregame[g["id"]], 3)      # what the home team's chance was before a finished game
 
+    # Playoff odds: the rest of the season and the playoffs played out many times
+    # (see pipeline/playoffs.py). Worked out again only when a result, the
+    # schedule or a rating has changed.
+    today = now.date().isoformat()
+    po = playoffs.update(read_json(state / "playoffs.json", {}), table, games, rating, today)
+    write_json(state / "playoffs.json", po)
+    before = playoffs.week_ago(po["days"], today)
+    for t in table:
+        t["po"] = dict(po["odds"].get(t["id"]) or {})
+        if t["id"] in before:
+            t["po"]["was"] = before[t["id"]]
+
     # Expected goals, from the play-by-play kept with each box score: each
     # team's total for and against, and the scale that makes the league's
     # expected goals equal its goals (see XG_STEADY_GOALS in config.py).
@@ -500,7 +513,7 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         "teams": table, "goat": goat_info, "games": games, "words": words,
         "game_page": config.GAME_PAGE, "player_page": config.PLAYER_PAGE, "logo": config.LOGO_URL,
         "live_feed": config.ESPN_SCOREBOARD, "live_seconds": config.LIVE_SECONDS, "espn_abbr": config.ESPN_ABBR,
-        "odds_tested": config.ODDS_TESTED, "xg": {"scale": round(xg_scale, 4), "tested": xg.model().get("tested")}})
+        "odds_tested": config.ODDS_TESTED, "playoffs": {"sims": config.PLAYOFF_SIMS, "tested": config.PLAYOFF_TESTED}, "xg": {"scale": round(xg_scale, 4), "tested": xg.model().get("tested")}})
     write_json(out / "players.json", rated)
     write_json(out / "teams.json", teams.compute(table, counted, boxes, rating, xg_scale))
     combos = team_lines(games, boxes, read_json(state / "lines.json", {}), people, table)

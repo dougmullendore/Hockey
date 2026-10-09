@@ -14,6 +14,7 @@ nav.standings = Standings
 nav.teams = Teams
 nav.players = Players
 nav.lines = Lines
+nav.odds = Odds
 
 # ---- Games page ----
 games.title = NHL Games
@@ -87,3 +88,13 @@ game.nhl_link = This game on NHL.com
 
 # ---- bottom of every page ----
 footer.about = Game times are shown in your own time zone. Schedules, scores, standings, channels and box scores come from the NHL's public feed, and scores of games in progress from ESPN's. Channels can change, so check before you tune in; streaming services need their own subscription. Chances of winning, the GOAT ranking and player ratings are worked out by this site. Team logos and player photos belong to the NHL and its teams and are shown from the league's own site. Not affiliated with or endorsed by the NHL or any team.
+
+# ---- Playoff odds page ----
+odds.title = NHL Playoff Odds
+odds.lede = Each team's chance of making the playoffs, reaching each round and winning the Stanley Cup, from playing out the rest of the season {sims} times.
+odds.button_league = League
+odds.button_conference = Conference
+odds.button_division = Division
+odds.none = The odds have not been worked out yet. They will be here after the next update.
+odds.note = These are this site's own estimate, not a sportsbook's line. Every coming game is decided by the chance of winning shown on the Games page; the standings, the wild cards and the bracket follow the league's rules, and each series is best of seven. Because nobody knows exactly how good a team is, least of all early in the season, each team's rating is moved up or down by a random amount every time the season is played out. Points is the average finish. Week is how far the chance of the playoffs has moved in seven days. Select a column heading to sort by it.
+odds.tested = Tested on {seasons}, at seven points in each season: of the teams given {high_range} to make the playoffs, {high} did; of those given {top_range}, {top}; of those given {low_range}, {low}.

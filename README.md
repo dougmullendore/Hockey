@@ -23,6 +23,8 @@ You do not need to run anything. GitHub does it all on a schedule.
 - **Teams** (third page): a sortable table of every team's stats per game.
 - **Players** (fourth page): every regular ranked by Impact per game; each
   name opens a card with his percentiles.
+- **Odds** (sixth page, after Lines): each team's chance of making the
+  playoffs, reaching each round and winning the Stanley Cup.
 
 ## Lines
 
@@ -216,6 +218,51 @@ in bold. These are the site's own estimate, not a sportsbook's line.
   finished 2025-26, for this first season. The settings are in
   `pipeline/config.py` and the method at the top of `pipeline/odds.py`.
 
+## Playoff odds
+
+The **Odds** page shows, for every team, the chance of making the playoffs,
+of reaching the second round, the conference final and the Cup Final, and of
+winning the Stanley Cup; the points it finishes with on average; and the
+chance of each way in (first, second or third in its division, or either
+wild card). It can be shown for the whole league, by conference or by
+division, and sorted by any column. Once a week of days has been kept, a
+Week column shows how far each team's playoff chance has moved.
+
+- **How:** the rest of the regular season is played out 10,000 times, and the
+  playoffs after it, and the page shows how often each thing happened
+  (`pipeline/playoffs.py`). Each coming game is decided by the chance of
+  winning shown on the Games page.
+- **Overtime:** 22.2% of games go past regulation, where the loser gets a
+  point, and 32.6% of those reach a shootout; past regulation the game is
+  close to a coin toss (the home team wins 52%). Counted from 6,560 games,
+  2021-22 to 2025-26.
+- **Not knowing how good a team is:** each time the season is played out,
+  every team's rating is first moved up or down by a random amount, a lot in
+  October and less as games are played. Without this the odds are too sure
+  of themselves early on.
+- **The rules:** the top three in each division and two wild cards in each
+  conference; ties broken by regulation wins, then regulation and overtime
+  wins, then wins (then a coin toss, where the league goes on to head-to-head
+  and goal difference). The better division winner plays the second wild
+  card. Every series is best of seven, with the extra home game for the team
+  that finished higher.
+- **Tested** on 2022-23 to 2025-26, at seven points in each season, always
+  from what was known at the time. The percentages were honest: of the teams
+  given 60 to 80% to make the playoffs, 68% did; over 80%, 94%; 40 to 60%,
+  48%; under 20%, 8%. Before a game was played, 10 of its 16 most likely
+  teams made the playoffs; with 15% of the season left, 15 of 16. The size
+  of the random move was chosen on these same seasons, so expect slightly
+  worse on new ones.
+- **Limits:** like the game odds, it knows results, not rosters, injuries or
+  trades. Four seasons hold only four champions, so the Cup odds are far
+  less tested than the playoff odds. Once the real playoffs begin, it still
+  plays them out from the seedings and does not yet use the real series
+  scores.
+- The odds are worked out again only when a result, the schedule or a
+  rating changes. They and each day's playoff chances are kept in
+  `playoffs.json` on the `state` branch. The settings are the `PLAYOFF_`
+  lines in `pipeline/config.py`.
+
 ## Where to watch
 
 Each game still to come shows the channels and streaming services the league
@@ -280,6 +327,7 @@ leaves the old site up; GitHub emails you, and the run log names the line.
 | `pipeline/xg.py` | Expected goals: reads the play-by-play and gives each shot its chance of scoring |
 | `model/xg.json` | The expected-goals model itself |
 | `pipeline/odds.py` | Rates every team from results and turns two ratings into a chance of winning |
+| `pipeline/playoffs.py` | Playoff odds: plays out the rest of the season and the playoffs many times |
 | `pipeline/web.py` | Downloading, with retries |
 | `pipeline/run.py` | The job: update everything stored, then build the page |
 | `ratings/seed.json` | Where each team's rating finished 2025-26 |
@@ -293,7 +341,7 @@ Two side branches of this repository hold what the job produces:
 - `state`: the season's games (`schedule.json`), the standings
   (`standings.json`), the box scores with what was taken from each game's
   play-by-play (`box.json`), players' earlier seasons (`careers.json`), who was on the ice together in each game (`lines.json`), players' details
-  (`people.json`), the ratings (`ratings.json`), and what happened on the
+  (`people.json`), the ratings (`ratings.json`), the playoff odds (`playoffs.json`), and what happened on the
   last run (`status.json`, `logs/last_run.log`).
 - `gh-pages`: the finished page.
 
