@@ -946,7 +946,8 @@
     if (next.length) { m.appendChild(el("h3", { "class": "day", text: W("team.coming_up") })); m.appendChild(el("ol", { "class": "games" }, next.map(function (g) { return row(g, true); }))); }
     if (done.length) { m.appendChild(el("h3", { "class": "day", text: W("team.latest_results") })); m.appendChild(el("ol", { "class": "games" }, done.slice().reverse().map(function (g) { return row(g, true); }))); }
     if (!mine.length) m.appendChild(el("p", { "class": "empty", text: "No games are listed for " + t.name + "." }));
-    if (mine.length) m.appendChild(el("p", { "class": "note" }, [el("a", { href: "#/", onclick: function () { state.team = id; }, text: "All " + t.short + " games this season" })]));
+    if (mine.length) m.appendChild(el("p", { "class": "note" }, [el("a", { href: "#/", onclick: function () { state.team = id; }, text: "All " + t.short + " games this season" }),
+      " · ", el("a", { href: "#/lines/" + id, text: t.short + " line combinations" })]));
     box.appendChild(m);
 
     var stats = el("section", { "class": "tsec" }, [el("h2", { text: W("team.stats") }), el("p", { "class": "empty", text: "Loading…" })]);
@@ -988,16 +989,96 @@
     }).catch(function () {});
   }
 
+  // ---- the lines page: a team's forward lines, defense pairs, special-teams units and goalies ----
+  var lineData = null;
+  function loadLines() {
+    if (lineData) return Promise.resolve(lineData);
+    return fetch("lines.json", { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { lineData = d; return d; });
+  }
+  function together(sec) { return Math.floor(sec / 60) + ":" + ("0" + (sec % 60)).slice(-2); }
+  function drawLines(id) {
+    var box = $("lines"), teams = data.teams.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    box.innerHTML = "";
+    if (!id) {      // no team chosen yet: all 32 to choose from
+      box.appendChild(el("h1", { text: W("lines.title") }));
+      box.appendChild(el("p", { "class": "lede", text: W("lines.lede") }));
+      box.appendChild(el("div", { "class": "teamgrid" }, teams.map(function (t) {
+        return el("a", { href: "#/lines/" + t.id }, [logo(t.id), el("span", { text: t.name })]);
+      })));
+      return;
+    }
+    var t = T(id);
+    if (!t) { box.appendChild(el("p", { "class": "empty", text: "There is no team with that name." })); return; }
+    document.title = t.short + " lines | " + data.site;
+    try { localStorage.setItem("lines-team", id); } catch (e) {}
+    var pick = el("select", { "aria-label": "Team", onchange: function () { location.hash = "#/lines/" + pick.value; } },
+      teams.map(function (x) { return el("option", { value: x.id, text: x.name, selected: x.id === id }); }));
+    box.appendChild(el("div", { "class": "thead" }, [logo(id, "big"), el("div", {}, [el("h1", { text: t.name + " " + W("lines.heading") }), el("p", { "class": "tsub", id: "lines-sub", text: "" })])]));
+    box.appendChild(el("div", { "class": "nav filters" }, [pick, el("a", { "class": "navlink", href: "#/team/" + id, text: W("lines.team_page") })]));
+    var body = el("div", {}, [el("p", { "class": "empty", text: "Loading the lines…" })]);
+    box.appendChild(body);
+    loadLines().then(function (d) {
+      var L = d.teams[id];
+      body.innerHTML = "";
+      if (!L) { body.appendChild(el("p", { "class": "empty", text: W("lines.none") })); return; }
+      var opp = T(L.game.opp);
+      $("lines-sub").textContent = "";
+      $("lines-sub").appendChild(document.createTextNode("From the last game, " + long(L.game.date) + (L.game.home ? " against the " : " at the ") + (opp ? opp.short : L.game.opp) + ". "));
+      $("lines-sub").appendChild(el("a", { href: "#/game/" + L.game.id, text: W("games.box_score") }));
+      function tile(pid, label) {
+        var p = L.players[String(pid)] || { name: "Unknown" };
+        return el("a", { "class": "ltile", href: "#/player/" + pid }, [face(p, "md"),
+          el("span", { "class": "lname", text: p.name }),
+          el("span", { "class": "lmeta", text: (p.num != null ? "#" + p.num + " · " : "") + (label || POS_ONE[p.pos] || p.pos || "") })]);
+      }
+      function section(title, heads, rows, labelOf, noteOf, cls) {
+        if (!rows.length) return;
+        var sec = el("section", { "class": "tsec lsec " + (cls || "") }, [el("h2", { text: title })]);
+        if (heads) sec.appendChild(el("div", { "class": "lrow lhead", "aria-hidden": "true", style: "--n:" + heads.length }, [el("span", { "class": "llabel" })].concat(heads.map(function (h) { return el("span", { text: h }); }))));
+        rows.forEach(function (r, i) {
+          sec.appendChild(el("div", { "class": "lrow", style: "--n:" + (heads ? heads.length : r.ids.length) }, [
+            el("span", { "class": "llabel" }, [el("b", { text: labelOf(i) }), noteOf && noteOf(r) ? el("small", { text: noteOf(r) }) : null])]
+            .concat(r.ids.map(function (pid) { return tile(pid); }))));
+        });
+        body.appendChild(sec);
+      }
+      function fiveNote(r) {
+        return r.toi ? together(r.toi) + " together" + (r.games > 1 ? " · " + together(r.season) + " in " + r.games + " games" : "") : "";
+      }
+      section(W("lines.forwards"), ["LW", "C", "RW"], L.f, function (i) { return "Line " + (i + 1); }, fiveNote, "fwd");
+      section(W("lines.defense"), ["LD", "RD"], L.d, function (i) { return "Pair " + (i + 1); }, fiveNote, "def");
+      var ord = ["1st", "2nd"];
+      section(W("lines.power_play"), null, L.pp, function (i) { return ord[i] + " unit"; }, function (r) { return r.toi ? together(r.toi) + " together" : ""; }, "unit");
+      section(W("lines.penalty_kill"), null, L.pk, function (i) { return ord[i] + " unit"; }, function (r) { return r.toi ? together(r.toi) + " together" : ""; }, "unit");
+      if (L.g.length) {
+        var roles = { start: "Started the last game", relief: "Came on in relief", roster: "On the roster" };
+        var sec = el("section", { "class": "tsec lsec" }, [el("h2", { text: W("lines.goalies") })]);
+        sec.appendChild(el("div", { "class": "lrow", style: "--n:" + Math.max(3, L.g.length) }, [el("span", { "class": "llabel" })].concat(L.g.map(function (g) { return tile(g.id, roles[g.role]); }))));
+        body.appendChild(sec);
+      }
+      body.appendChild(el("p", { "class": "note", text: W("lines.note", { n: L.special_games }) }));
+    }).catch(function () {
+      body.innerHTML = "";
+      body.appendChild(el("p", { "class": "empty", text: "The lines could not be loaded. Reload the page to try again." }));
+    });
+  }
+
   function route() {
-    var h = location.hash, card = /^#\/?player\/(\d+)/.exec(h), game = /^#\/?game\/(\d+)/.exec(h), tm = /^#\/?team\/(.+)$/.exec(h);
+    var h = location.hash, card = /^#\/?player\/(\d+)/.exec(h), game = /^#\/?game\/(\d+)/.exec(h), tm = /^#\/?team\/(.+)$/.exec(h), ln = /^#\/?lines(?:\/(.+))?$/.exec(h);
     stopGame();
-    var page = tm ? "team" : game ? "game" : card ? "card" : /^#\/?players/.test(h) ? "players" : /^#\/?standings/.test(h) ? "standings" : /^#\/?teams/.test(h) ? "teams" : "games";
-    ["games", "standings", "teams", "players", "card", "game", "team"].forEach(function (p) { $("page-" + p).hidden = p !== page; });
+    var page = tm ? "team" : game ? "game" : card ? "card" : ln ? "lines" : /^#\/?players/.test(h) ? "players" : /^#\/?standings/.test(h) ? "standings" : /^#\/?teams/.test(h) ? "teams" : "games";
+    ["games", "standings", "teams", "players", "lines", "card", "game", "team"].forEach(function (p) { $("page-" + p).hidden = p !== page; });
     Array.prototype.forEach.call(document.querySelectorAll(".pages a"), function (a) {
       if (a.dataset.page === (page === "card" ? "players" : page === "game" ? "games" : page === "team" ? "teams" : page)) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    document.title = ({ standings: W("standings.title"), teams: W("teams.title"), players: W("players.title"), game: W("games.box_score"), team: "Team", card: "Player card" }[page] || W("games.title")) + " | " + data.site;
-    if (page === "team") drawTeam(decodeURIComponent(tm[1])); else if (page === "game") drawGame(game[1]); else if (page === "standings") drawStandings(); else if (page === "teams") drawTeams(); else if (page === "players") drawPlayers(); else if (page === "card") drawCard(card[1]); else draw();
+    document.title = ({ standings: W("standings.title"), teams: W("teams.title"), players: W("players.title"), lines: W("lines.title"), game: W("games.box_score"), team: "Team", card: "Player card" }[page] || W("games.title")) + " | " + data.site;
+    if (page === "lines") {
+      var remembered = null;
+      try { remembered = localStorage.getItem("lines-team"); } catch (e) {}
+      if (!ln[1] && remembered && T(remembered)) { location.replace("#/lines/" + remembered); return; }
+      drawLines(ln[1] ? decodeURIComponent(ln[1]) : null);
+    } else if (page === "team") drawTeam(decodeURIComponent(tm[1])); else if (page === "game") drawGame(game[1]); else if (page === "standings") drawStandings(); else if (page === "teams") drawTeams(); else if (page === "players") drawPlayers(); else if (page === "card") drawCard(card[1]); else draw();
     window.scrollTo(0, 0);
   }
 

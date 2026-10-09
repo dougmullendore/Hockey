@@ -13,6 +13,7 @@ nav.games = Games
 nav.standings = Standings
 nav.teams = Teams
 nav.players = Players
+nav.lines = Lines
 
 # ---- Games page ----
 games.title = NHL Games
@@ -65,6 +66,19 @@ players.note = Impact is a box-score rating: a goal is worth 0.75, a first assis
 players.note_goalies = A goalie's Impact is the goals he saved beyond what an average goalie would have on the same number of shots (at even strength, against the power play and shorthanded), at 0.75 a goal. Impact does not see shot quality; goals saved above expected, on his card, does. Early in the season a game or two can move a goalie a long way.
 players.back = All players
 players.nhl_link = His page on NHL.com
+
+# ---- Lines page ----
+lines.title = NHL Line Combinations
+lines.lede = Each team's forward lines, defense pairs, power-play and penalty-kill units and goalies, as they actually played in its last game. Choose a team.
+lines.heading = Lines
+lines.team_page = Team page
+lines.forwards = Forwards
+lines.defense = Defense Pairs
+lines.power_play = Power Play
+lines.penalty_kill = Penalty Kill
+lines.goalies = Goalies
+lines.none = No lines yet: this team has not played a game with a shift chart this season.
+lines.note = These are worked out from the league's shift charts, not announced by the team: the three forwards (and two defensemen) who spent the most five-on-five time together in the last game are a line, then the next among the rest. Lines are numbered by ice time together. Power-play and penalty-kill units are the groups out together most over the last {n} games. A line broken up during the game, an injury or a benching shows as it happened. Left and right sides go by each player's listed position and shooting hand, so a center playing wing may be shown in the middle. Choose a player for his card.
 
 # ---- a game's own page ----
 game.back = All Games

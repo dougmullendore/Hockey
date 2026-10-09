@@ -41,6 +41,18 @@ def get_json(path: str, tries: int | None = None):
     return json.loads(get_bytes(config.API + path, tries=tries))
 
 
+def get_urls(urls: list[str], tries: int | None = None):
+    """Download JSON documents from full addresses at once. Yields (url, document_or_None, error_or_None), in order."""
+    def one(url):
+        try:
+            return url, json.loads(get_bytes(url, tries=tries)), None
+        except Exception as e:
+            return url, None, e
+
+    with ThreadPoolExecutor(max_workers=config.FETCH_THREADS) as pool:
+        yield from pool.map(one, urls)
+
+
 def get_many(paths: list[str], tries: int | None = None):
     """Download many documents at once. Yields (path, document_or_None, error_or_None), in order."""
     def one(path):

@@ -23,6 +23,11 @@ BOX_REFRESH_DAYS = 2
 # Rosters (names, photos, height, weight, birthplace) are read again after this many days.
 ROSTER_REFRESH_DAYS = 1
 
+# Shift charts (who was on the ice when), for the Lines page. They are on the
+# league's older statistics feed.
+SHIFTS_URL = "https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game}"
+SHIFTS_GIVE_UP_DAYS = 4       # a game whose shift chart is still empty after this many days is left without one
+
 # Each player's earlier seasons are read from his own page in the feed and kept;
 # they are read again after this many days (for a new season, or the playoffs).
 CAREER_REFRESH_DAYS = 30

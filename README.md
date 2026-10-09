@@ -24,6 +24,31 @@ You do not need to run anything. GitHub does it all on a schedule.
 - **Players** (fourth page): every regular ranked by Impact per game; each
   name opens a card with his percentiles.
 
+## Lines
+
+The **Lines** page (fifth page, `#/lines/DAL`) shows a team's line
+combinations: four forward lines (left wing, center, right wing), three
+defense pairs, the two power-play units, the two penalty-kill units and the
+goalies, each player with his photo and a link to his card.
+
+Nobody announces these to the site: they are worked out from the league's
+shift charts, which list every shift of every game (`pipeline/lines.py`).
+
+- The three forwards who spent the most five-on-five time together in the
+  team's last game are a line, then the next three among the rest, and so on;
+  defense pairs the same way. Lines are numbered by ice time together, and
+  each shows that time and how long the same players have been together over
+  the season.
+- Power-play and penalty-kill units are the groups out together most over
+  the last three games (one game has too little of either to go on).
+- The goalie who started the last game is first, then the others on the roster.
+- It shows what the coach did, not what he plans: a line broken up during
+  the game, an injury or a benching shows as it happened. Left and right
+  sides go by each player's listed position and shooting hand.
+- There is no injury list: the league's feed does not carry one.
+- A game's shift chart sometimes arrives late or not at all; until it does,
+  the page shows the lines from the game before.
+
 ## Team pages
 
 Every team name on the site links to that team's page (`#/team/DAL`): its
@@ -248,6 +273,7 @@ leaves the old site up; GitHub emails you, and the run log names the line.
 | `pipeline/config.py` | Every setting: season dates, odds settings, GOAT weights, what to show |
 | `pipeline/nhl.py` | Reads the league's feed: schedule, standings, box scores, rosters |
 | `pipeline/players.py` | Rates the players against each other and works out percentiles |
+| `pipeline/lines.py` | Line combinations: who was on the ice together, from the shift charts |
 | `pipeline/careers.py` | Each player's earlier seasons, joined to this one for his career table |
 | `pipeline/teams.py` | Adds up each team's stats from the box scores |
 | `pipeline/goat.py` | The GOAT ranking: record, schedule, expected-goal share, goal share and a hot-streak boost |
@@ -266,7 +292,7 @@ Two side branches of this repository hold what the job produces:
 
 - `state`: the season's games (`schedule.json`), the standings
   (`standings.json`), the box scores with what was taken from each game's
-  play-by-play (`box.json`), players' earlier seasons (`careers.json`), players' details
+  play-by-play (`box.json`), players' earlier seasons (`careers.json`), who was on the ice together in each game (`lines.json`), players' details
   (`people.json`), the ratings (`ratings.json`), and what happened on the
   last run (`status.json`, `logs/last_run.log`).
 - `gh-pages`: the finished page.

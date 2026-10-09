@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pipeline import careers, config, goat, nhl, odds, players, run, teams, xg
+from pipeline import careers, config, goat, lines, nhl, odds, players, run, teams, xg
 
 FIX = Path(__file__).parent / "fixtures"
 UTC = dt.timezone.utc
@@ -359,6 +359,41 @@ def test_a_real_play_by_play_is_read():
     assert all(v[0] >= v[1] and v[4] >= v[3] for v in a["sk"].values())
 
 
+# ------------------------------------------------------------------- lines --
+def test_lines_are_read_off_a_real_shift_chart():
+    """Chicago at Florida, the first game of 2025-26."""
+    who = fixture("positions_2025020001.json.gz")
+    pos = {int(p): v[0] for p, v in who.items() if v[0] != "G"}
+    name = lambda ids: sorted(who[str(p)][1] for p in ids)
+    shifts = lines.parse_shifts(fixture("shiftcharts_2025020001.json.gz"))
+    assert len(shifts) > 800 and {s[0] for s in shifts} == {"CHI", "FLA"} and all(0 <= s[3] < s[4] <= 1200 for s in shifts)
+    counted = lines.count(shifts, pos)
+    fla = counted["FLA"]
+    assert name(fla["f"][0][0]) == ["Bennett", "Marchand", "Verhaeghe"] and 700 < fla["f"][0][1] < 1000       # about 14 minutes together
+    assert name(fla["d"][0][0]) == ["Jones", "Mikkola"] and all(len(ids) == 3 for ids, _ in fla["f"]) and all(len(ids) == 2 for ids, _ in fla["d"])
+    assert all(4 <= len(ids) <= 5 for ids, _ in fla["pp"]) and all(3 <= len(ids) <= 4 for ids, _ in fla["pk"])
+    ice = {}
+    for team, pid, _, start, end in shifts:
+        if team == "FLA" and pid in pos:
+            ice[pid] = ice.get(pid, 0) + end - start
+    dressed = [{"id": p, "pos": pos[p], "toi": t, "fo": 0, "sh": "L"} for p, t in ice.items()]
+    found = lines.team_lines(fla, [fla], [fla, fla], dressed)
+    assert len(found["f"]) == 4 and len(found["d"]) == 3 and len(found["pp"]) == 2 and len(found["pk"]) == 2
+    everyone = [p for row in found["f"] for p in row["ids"]]
+    assert len(everyone) == 12 == len(set(everyone))                                # each forward on one line only
+    assert [name(r["ids"]) for r in found["d"]][:2] == [["Jones", "Mikkola"], ["Ekblad", "Forsling"]]
+    assert found["f"][0]["season"] == 2 * found["f"][0]["toi"] and found["f"][0]["games"] == 2
+    assert not set(found["pp"][0]["ids"]) & set(found["pp"][1]["ids"]) and len(found["pk"][0]["ids"]) == 4
+    assert pos[found["f"][0]["ids"][0]] == "L"                                      # Marchand, the listed left wing, on the left
+
+
+def test_a_forward_line_is_set_out_left_to_right():
+    pos = {1: "C", 2: "L", 3: "R", 4: "C", 5: "C"}
+    assert lines.arrange([1, 2, 3], pos, {}) == [2, 1, 3]
+    assert lines.arrange([3, 1, 4], pos, {4: 12, 1: 3}) == [1, 4, 3]               # two centers: the one taking the faceoffs is in the middle
+    assert lines.arrange([1, 4, 5], pos, {5: 9}) == [1, 5, 4] and lines.arrange([2, 3], pos, {}) == [2, 3]
+
+
 # ------------------------------------------------------- players and teams --
 def small_season():
     """Two finished games between UTA and BOS, with standings, as the job stores them."""
@@ -516,6 +551,9 @@ def test_the_site_is_built_from_what_is_stored():
         run.write_json(state / "standings.json", {"read": "2026-10-11T10:00:00+00:00", "teams": table})
         run.write_json(state / "box.json", boxes)
         run.write_json(state / "people.json", {"read": "2026-10-11", "players": {"21": {"first": "David", "last": "Pastrnak", "photo": "p.png"}}})
+        shift_counts = {"v": lines.VERSION, "BOS": {"f": [[[21, 22], 400]], "d": [], "pp": [], "pk": [], "ppt": {}, "pkt": {}},
+                        "UTA": {"f": [], "d": [], "pp": [], "pk": [], "ppt": {}, "pkt": {}}}
+        run.write_json(state / "lines.json", {"2026020090": shift_counts})
         run.write_json(state / "careers.json", {"21": {"at": "2026-10-11", "g": 0, "seasons": [[2025, "Bruins", 82, 40, 50, 90, 5, 20, 10, 30, 6, 250, 1100]]}})
         res = run.build_site(state, out, dt.datetime(2026, 10, 11, 11, tzinfo=UTC))
         assert res["games"] == 3 and res["played"] == 2 and res["game_pages"] == 2 and res["with_odds"] == 1 and res["missing_box"] == []
@@ -530,6 +568,11 @@ def test_the_site_is_built_from_what_is_stored():
         assert log["career"]["seasons"] == [[2025, "Bruins", 82, 40, 50, 90, 5, 20, 10, 30, 6, 250, 1100], [2026, "Bruins", 2, 2, 2, 4, 0, 0, 2, 2, 0, 4, 900]]
         assert log["career"]["total"][2:6] == [84, 42, 52, 94] and log["career"]["known"]
         assert json.loads((out / "player" / "11.json").read_text())["career"]["known"] is False
+        combos = json.loads((out / "lines.json").read_text())["teams"]
+        assert set(combos) == {"BOS", "UTA"} and combos["BOS"]["game"] == {"id": 2026020090, "date": "2026-10-10", "opp": "UTA", "home": 1}
+        assert [g["id"] for g in combos["BOS"]["g"]] == [24] and combos["BOS"]["g"][0]["role"] == "start"
+        assert combos["BOS"]["d"] == [{"ids": [23], "toi": 0, "season": 0, "games": 0}] and combos["BOS"]["players"]["21"]["name"] == "David Pastrnak"
+        assert sorted(combos["BOS"]["f"][0]["ids"]) == [21, 22]
         by = {g["id"]: g for g in data["games"]}
         assert by[2026020056]["box"] == 1 and 0 < by[2026020056]["p0"] < 1 and by[2026020056]["home"]["rank"] == 1
         # Utah, at home, has less of a chance than a home team level with its visitor

@@ -427,3 +427,31 @@ a.tlink:hover { color: var(--teal); text-decoration: underline; }
 .cartable tbody tr.now td, .cartable tbody tr.now th { background: color-mix(in srgb, var(--teal-soft) 45%, var(--sheet)); }
 .cartable tfoot tr.po td, .cartable tfoot tr.po th { border-top: 1px solid var(--line); font-weight: 400; color: var(--ink-2); }
 .cartable td.l { color: var(--ink-2); }
+
+/* ---- the lines page ---- */
+.teamgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 8px; }
+.teamgrid a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; color: var(--ink); font-weight: 600; text-decoration: none; }
+.teamgrid a:hover { border-color: var(--teal); color: var(--teal); }
+.navlink { align-self: center; font-size: .875rem; font-weight: 600; margin-left: 6px; }
+.lsec { max-width: 60rem; }
+.lrow { display: grid; grid-template-columns: 8.5rem repeat(var(--n, 3), minmax(0, 1fr)); gap: 8px; align-items: stretch; margin-top: 8px; }
+.lhead { margin-top: 0; font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); text-align: center; }
+.llabel { display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.llabel b { font: 700 1.0625rem/1.1 "Barlow Condensed", sans-serif; }
+.llabel small { font-size: .75rem; color: var(--ink-2); line-height: 1.3; }
+.ltile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px 10px; background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; text-align: center; text-decoration: none; color: var(--ink); min-width: 0; }
+.ltile:hover { border-color: var(--teal); }
+.ltile:hover .lname { color: var(--teal); }
+.face.md { width: 64px; height: 64px; font-size: 1.25rem; }
+.lname { font-weight: 600; font-size: .9375rem; line-height: 1.2; overflow-wrap: anywhere; }
+.lmeta { font-size: .75rem; color: var(--ink-2); }
+@media (max-width: 640px) {
+  .lrow { grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 6px; }
+  .lrow .llabel { grid-column: 1 / -1; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 8px; margin-top: 6px; }
+  .lhead .llabel { display: none; }
+  .lsec.unit .lrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .face.md { width: 52px; height: 52px; font-size: 1rem; }
+  .ltile { padding: 8px 4px; }
+  .lname { font-size: .8125rem; }
+  .pages a { font-size: clamp(.6875rem, 3.2vw, .9375rem); padding: 12px clamp(2px, 1.6vw - 3px, 9px); }
+}
