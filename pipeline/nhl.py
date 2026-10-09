@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from . import config, web
+from . import config, web, xg
 
 FINAL_STATES = ("FINAL", "OFF")
 LIVE_STATES = ("LIVE", "CRIT")
@@ -15,7 +15,7 @@ NOT_PLAYED = {"PPD": "Postponed", "CNCL": "Canceled", "SUSP": "Suspended"}
 
 # One stored row per skater per game, and one per goalie, in this order.
 SK = ["id", "num", "name", "pos", "g", "a", "pm", "pim", "hits", "ppg", "sog", "toi", "blk", "shifts", "gv", "tk",
-      "fo", "a1", "pt", "pd"]
+      "fo", "a1", "pt", "pd", "ppp", "shpts", "gwg"]
 GK = ["id", "num", "name", "sa", "sv", "ga", "toi", "start", "dec", "es_sa", "es_sv", "pp_sa", "pp_sv", "sh_sa",
       "sh_sv", "pim"]
 
@@ -177,9 +177,10 @@ def fetch_standings() -> list[dict]:
 
 
 # -------------------------------------------------------------- box scores --
-def parse_box(box: dict, landing: dict | None, rail: dict | None) -> dict:
+def parse_box(box: dict, landing: dict | None, rail: dict | None, plays: dict | None = None) -> dict:
     """One game's stored record: every player's line, the score by period, the
-    goals, the three stars and each team's totals."""
+    goals, the three stars and each team's totals; and, from the play-by-play,
+    expected goals, shot attempts and faceoffs (see pipeline/xg.py)."""
     feed = box.get("gameState") or ""
     out = {"date": box.get("gameDate") or "", "status": "F" if feed in FINAL_STATES else "L" if feed in LIVE_STATES else "P",
            "full": landing is not None and rail is not None}
@@ -234,6 +235,10 @@ def parse_box(box: dict, landing: dict | None, rail: dict | None) -> dict:
             helpers = [_int(a.get("playerId")) for a in g.get("assists") or [] if a.get("playerId")]
             if helpers and helpers[0] in rows:
                 rows[helpers[0]]["a1"] += 1
+            points = {"pp": "ppp", "sh": "shpts"}.get(g.get("strength"))
+            for pid in [_int(g.get("playerId"))] + helpers:
+                if points and pid in rows:
+                    rows[pid][points] += 1
             goals.append([_int(d.get("number")), d.get("periodType") or "REG", g.get("timeInPeriod") or "",
                           1 if side_of.get(_text(g.get("teamAbbrev"))) == "home" else 0, _int(g.get("playerId")), helpers,
                           g.get("strength") or "ev", g.get("goalModifier") or "none",
@@ -251,6 +256,15 @@ def parse_box(box: dict, landing: dict | None, rail: dict | None) -> dict:
             if drawer:
                 drawer["pd"] += minors
     out["goals"] = goals
+    # The game-winning goal: the one that put the winner one ahead of the loser's final score.
+    final = {"away": out["away"]["score"], "home": out["home"]["score"]}
+    if feed in FINAL_STATES and final["away"] != final["home"]:
+        winner = 1 if final["home"] > final["away"] else 0
+        need = min(final.values()) + 1
+        for g in goals:
+            if g[3] == winner and g[9 if winner else 8] == need and g[4] in rows:
+                rows[g[4]]["gwg"] += 1
+                break
     out["stars"] = [[_int(s.get("playerId")), _text(s.get("teamAbbrev")), _text(s.get("name"))]
                     for s in sorted(summary.get("threeStars") or [], key=lambda s: _int(s.get("star")))]
 
@@ -275,17 +289,19 @@ def parse_box(box: dict, landing: dict | None, rail: dict | None) -> dict:
             t.setdefault(key, sum(r[key] for r in sk))
         out[side]["sk"] = [[r[c] for c in SK] for r in sk]
     out["tstats"] = team_stats
+    if plays is not None:
+        out["adv"] = xg.summarize(plays)
     return out
 
 
 def fetch_box(game_id: int) -> dict:
-    """A game's box score, with its summary and team totals when they can be read."""
+    """A game's box score, with its summary, team totals and play-by-play when they can be read."""
     docs = {}
-    for path, doc, err in web.get_many([f"gamecenter/{game_id}/{part}" for part in ("boxscore", "landing", "right-rail")]):
+    for path, doc, err in web.get_many([f"gamecenter/{game_id}/{part}" for part in ("boxscore", "landing", "right-rail", "play-by-play")]):
         if err is not None and path.endswith("boxscore"):
             raise err
         docs[path.rsplit("/", 1)[1]] = doc
-    return parse_box(docs["boxscore"], docs.get("landing"), docs.get("right-rail"))
+    return parse_box(docs["boxscore"], docs.get("landing"), docs.get("right-rail"), docs.get("play-by-play"))
 
 
 # ----------------------------------------------------------------- rosters --

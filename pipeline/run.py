@@ -28,7 +28,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import config, goat, nhl, odds, players, teams, web
+from . import config, goat, nhl, odds, players, teams, web, xg
 
 SITE_SRC = Path(__file__).resolve().parents[1] / "site"
 
@@ -104,18 +104,18 @@ def season_games(state: Path) -> dict:
     return {"season": sched["season"], "games": games, "teams": table}
 
 
+def complete(have: dict | None) -> bool:
+    """A stored game with everything in: the final box score, its summary, and
+    the play-by-play read with the expected-goals model in use today."""
+    have = have or {}
+    return have.get("status") == "F" and bool(have.get("full")) and (have.get("adv") or {}).get("v") == xg.model()["version"]
+
+
 def boxes_wanted(games: list[dict], stored: dict, today: dt.date) -> list[dict]:
-    """Finished games with no complete box score yet, and games from the last
-    few days, whose numbers the league may have corrected."""
+    """Finished games not completely stored yet, and games from the last few
+    days, whose numbers the league may have corrected."""
     recent = (today - dt.timedelta(days=config.BOX_REFRESH_DAYS)).isoformat()
-    out = []
-    for g in games:
-        if g["state"] != "final":
-            continue
-        have = stored.get(str(g["id"])) or {}
-        if have.get("status") != "F" or not have.get("full") or g["date"] >= recent:
-            out.append(g)
-    return out
+    return [g for g in games if g["state"] == "final" and (not complete(stored.get(str(g["id"]))) or g["date"] >= recent)]
 
 
 def fetch_boxes(stored: dict, games: list[dict]) -> dict:
@@ -201,8 +201,7 @@ def live_now(state: Path, now: dt.datetime) -> list[dict]:
     for g in (sched.get("games") or {}).values():
         if not g.get("start") or not (t - 5 * 3600 <= g["start"] <= t + 20 * 60) or g["state"] == "other":
             continue
-        have = boxes.get(str(g["id"])) or {}
-        if not (g["state"] == "final" and have.get("status") == "F" and have.get("full")):
+        if not (g["state"] == "final" and complete(boxes.get(str(g["id"])))):
             out.append(g)
     return out
 
@@ -214,8 +213,7 @@ def update_live_boxes(state: Path, now: dt.datetime) -> dict:
     stored = read_json(state / "box.json", {})
     t = now.timestamp()
     todo = [g for g in sel["games"] if g.get("start") and t - 5 * 3600 <= g["start"] <= t and g["state"] in ("live", "final")
-            and not (g["state"] == "final" and (stored.get(str(g["id"])) or {}).get("status") == "F"
-                     and (stored.get(str(g["id"])) or {}).get("full"))]
+            and not (g["state"] == "final" and complete(stored.get(str(g["id"]))))]
     res = fetch_boxes(stored, todo)
     write_json(state / "box.json", stored)
     log(f"box scores now: {res['read']} of {res['asked']} games under way or just finished")
@@ -241,7 +239,8 @@ def game_files(out: Path, games: list[dict], boxes: dict, people: dict) -> int:
         if not b or not (b["away"]["sk"] or b["home"]["sk"]):
             continue
         short = {}
-        doc = {"id": g["id"], "status": b.get("status", ""), "line": b.get("line") or [], "tstats": b.get("tstats") or {}}
+        doc = {"id": g["id"], "status": b.get("status", ""), "line": b.get("line") or [], "tstats": b.get("tstats") or {},
+               "xg": (b.get("adv") or {}).get("xg")}
         for side in ("away", "home"):
             sk, gk = [], []
             for row in b[side]["sk"]:
@@ -312,19 +311,39 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         elif g["id"] in pregame:
             g["p0"] = round(pregame[g["id"]], 3)      # what the home team's chance was before a finished game
 
-    # The GOAT ranking: head to head, then strength of schedule, the standings
-    # and record (see pipeline/goat.py). Regular-season games only.
-    place = {t["id"]: t["rank"] for t in table}
-    ranking = goat.rank(counted, rating, set(place), place)
+    # Expected goals, from the play-by-play kept with each box score: each
+    # team's total for and against, and the scale that makes the league's
+    # expected goals equal its goals (see XG_STEADY_GOALS in config.py).
+    boxes = read_json(state / "box.json", {})
+    chances, goals = {t["id"]: [0.0, 0.0] for t in table}, 0
+    for g in counted:
+        box = boxes.get(str(g["id"])) or {}
+        pair = (box.get("adv") or {}).get("xg")
+        if g["state"] != "final" or box.get("status") != "F" or not pair:
+            continue
+        goals += g["away"]["score"] + g["home"]["score"] - (1 if g.get("end") == "SO" else 0)
+        for side, mine, theirs in (("away", pair[0], pair[1]), ("home", pair[1], pair[0])):
+            if g[side]["id"] in chances:
+                chances[g[side]["id"]][0] += mine
+                chances[g[side]["id"]][1] += theirs
+    expected = sum(v[0] for v in chances.values())
+    xg_scale = (goals + config.XG_STEADY_GOALS) / (expected + config.XG_STEADY_GOALS)
+
+    # The GOAT ranking: record, strength of schedule, expected-goal share, goal
+    # share and a boost for a hot streak (see pipeline/goat.py). Regular season only.
+    ranking = goat.rank(counted, rating, table, chances)
     spot = {t: i + 1 for i, t in enumerate(ranking["order"])}
-    by_schedule = sorted(place, key=lambda t: -ranking["factors"][t][0])
+    by_schedule = sorted(ranking["sos"], key=lambda t: -ranking["sos"][t])
     for t in table:
-        t["goat"] = spot[t["id"]]
-        t["sos_rank"] = by_schedule.index(t["id"]) + 1
-    goat_info = {"weights": config.GOAT_WEIGHTS,
-                 # season series each order has the wrong way round
-                 "standings_wrong": goat.contradictions(sorted(place, key=place.get), counted, set(place)),
-                 "goat_wrong": goat.contradictions(ranking["order"], counted, set(place))}
+        tid = t["id"]
+        t["goat"] = spot[tid]
+        t["goat_score"] = round(ranking["score"][tid], 3)
+        t["sos_rank"] = by_schedule.index(tid) + 1
+        t["xg_pct"] = round(100 * ranking["xg_pct"][tid], 1) if sum(chances[tid]) else None
+        t["g_pct"] = round(100 * ranking["goal_pct"][tid], 1)
+        t["hot"] = ranking["streak"][tid] if ranking["boost"][tid] else 0
+    goat_info = {"weights": config.GOAT_WEIGHTS, "hot_from": config.GOAT_HOT_FROM, "hot_step": config.GOAT_HOT_STEP,
+                 "hot_max": config.GOAT_HOT_MAX}
 
     words = read_words()                       # checked before anything is written
     if out.exists():
@@ -340,12 +359,15 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         page = page.replace(f'"{name}"', f'"{name}?v={stamp}"')
     (out / "index.html").write_text(page)
 
-    boxes = read_json(state / "box.json", {})
     people = read_json(state / "people.json", {}).get("players") or {}
     if not config.SHOW_PHOTOS:
         people = {k: {x: y for x, y in v.items() if x != "photo"} for k, v in people.items()}
-    rated = players.compute(table, counted, boxes, people)
+    rated = players.compute(table, counted, boxes, people, xg_scale)
     rated["through"] = max((g["date"] for g in counted if g["state"] == "final"), default=None)
+    # One small file per player with his game-by-game lines, for his card.
+    (out / "player").mkdir(exist_ok=True)
+    for pid, lines in rated.pop("logs").items():
+        write_json(out / "player" / f"{pid}.json", {"id": pid, "games": lines})
     with_box = game_files(out, games, boxes, people)
     write_json(out / "data.json", {
         "site": config.SITE_NAME, "league": config.LEAGUE, "updated": now.isoformat(timespec="seconds"), "season": season,
@@ -353,9 +375,9 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         "teams": table, "goat": goat_info, "games": games, "words": words,
         "game_page": config.GAME_PAGE, "player_page": config.PLAYER_PAGE, "logo": config.LOGO_URL,
         "live_feed": config.ESPN_SCOREBOARD, "live_seconds": config.LIVE_SECONDS, "espn_abbr": config.ESPN_ABBR,
-        "odds_tested": config.ODDS_TESTED})
+        "odds_tested": config.ODDS_TESTED, "xg": {"scale": round(xg_scale, 4), "tested": xg.model().get("tested")}})
     write_json(out / "players.json", rated)
-    write_json(out / "teams.json", teams.compute(table, counted, boxes, rating))
+    write_json(out / "teams.json", teams.compute(table, counted, boxes, rating, xg_scale))
     (out / ".nojekyll").write_text("")
     done = sum(1 for g in games if g["state"] == "final")
     log(f"site: {len(games):,} games ({done:,} played, {with_box:,} with a box score), {len(table)} teams, "
@@ -363,7 +385,8 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         f"{rated['pos_regulars'].get('G', 0)} goalies are ranked")
     return {"games": len(games), "played": done, "game_pages": with_box, "teams": len(table),
             "players": len(rated["players"]), "regulars": rated["regulars"],
-            "with_odds": sum(1 for g in games if "p" in g), "with_channel": sum(1 for g in games if g["state"] != "final" and g.get("tv")),
+            "with_odds": sum(1 for g in games if "p" in g), "xg_scale": round(xg_scale, 4),
+            "with_play_by_play": sum(1 for g in games if (boxes.get(str(g["id"])) or {}).get("adv")), "with_channel": sum(1 for g in games if g["state"] != "final" and g.get("tv")),
             "missing_box": [g["id"] for g in games if g["state"] == "final" and not g.get("box")][:20]}
 
 

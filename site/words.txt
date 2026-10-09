@@ -34,7 +34,7 @@ games.live_note = Live scores from ESPN, refreshed every {seconds} seconds.
 # ---- Standings page ----
 standings.title = NHL Standings
 standings.lede = The league's own standings, as of {date}.
-standings.lede_goat = This site's own ranking of the 32 teams: head to head first, then strength of schedule, place in the standings and record.
+standings.lede_goat = This site's own ranking of the 32 teams, from record, strength of schedule, expected-goal share and goal share, with a boost for a team on a hot streak.
 standings.button_division = Division
 standings.button_wildcard = Wild Card
 standings.button_conference = Conference
@@ -42,13 +42,13 @@ standings.button_league = League
 standings.button_goat = GOAT Ranking
 standings.note = Two points for a win, one for a loss in overtime or a shootout. Teams level on points are separated the league's way: fewer games played, then regulation wins. Hold or hover over a column heading for what it means; choose a team to see its page.
 standings.note_line = The line marks the playoff places: the top three in each division, and the two best of the rest in each conference as wild cards.
-standings.note_goat = The same columns as the standings, in this site's order. League is the team's place in the standings; SOS ranks the 32 by how strong their opponents have been (1 is the hardest). Redone after every game.
-standings.note_goat_how = Every team is ranked on four things, most important first: head to head, strength of schedule (the average rating of the teams played), its place in the standings, and its record. A team is ranked above one it leads in their season series unless the other three say the gap is wide. The standings rank a team below one it leads head to head {standings} times; the GOAT ranking does {goat} times.
+standings.note_goat = The same columns as the standings, in this site's order. League is the team's place in the standings; SOS ranks the 32 by how strong the teams they have played are (1 is the hardest); xG% is the team's share of the expected goals in its games and G% its share of the actual goals. Redone after every game.
+standings.note_goat_how = Each team gets its place among the 32 on four things: record (30%), expected-goal share (30%), goal share (25%) and strength of schedule (15%). A team that has won {from} or more in a row is hot and gets a boost for each win in the streak. Expected goals add up how likely each shot was to go in, from where and how it was taken, so they say who has had the better chances whatever the bounces.
 
 # ---- Teams page ----
 teams.title = NHL Team Stats
 teams.lede = How each team scores, shoots, defends and plays special teams, per game, from official box scores.
-teams.note = Rating is where this site's rating of results (the one behind the odds) places the team; SOS ranks the 32 by how strong their opponents have been. Choose a column heading to sort; hold or hover over a heading for what it means.
+teams.note = xGF and xGA are expected goals: how many goals the team's chances, and its opponents', were worth, from where and how each shot was taken. Rating is where this site's rating of results (the one behind the odds) places the team; SOS ranks the 32 by how strong their opponents have been. Choose a column heading to sort; hold or hover over a heading for what it means.
 
 # ---- a team's own page ----
 team.games = Games
@@ -62,7 +62,7 @@ team.players_note = # is his rank by Impact per game among all regular skaters i
 players.title = NHL Players
 players.lede = Every regular in the NHL, ranked by Impact per game: the points he adds per game over an average player at his position.
 players.note = Impact is a box-score rating: a goal is worth 0.75, a first assist 0.70, a second assist 0.55, a shot on goal 0.075, a blocked shot 0.05, a takeaway 0.03 (a giveaway costs the same), a minor penalty drawn 0.15 (one taken costs the same) and each goal of plus-minus 0.15. A player's total is compared with what an average forward or defenseman would have in the same ice time. It cannot see shot quality or who else was on the ice, and it does not adjust for the opponent. Early in the season a few games can move a player a long way.
-players.note_goalies = A goalie's Impact is the goals he saved beyond what an average goalie would have on the same shots (at even strength, against the power play and shorthanded), at 0.75 a goal. It cannot see shot quality. Early in the season a game or two can move a goalie a long way.
+players.note_goalies = A goalie's Impact is the goals he saved beyond what an average goalie would have on the same number of shots (at even strength, against the power play and shorthanded), at 0.75 a goal. Impact does not see shot quality; goals saved above expected, on his card, does. Early in the season a game or two can move a goalie a long way.
 players.back = All players
 players.nhl_link = His page on NHL.com
 

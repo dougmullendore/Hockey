@@ -1,6 +1,7 @@
 """Team stats for the 32 teams, from the official box scores.
 
-Each team's own numbers per game and its opponents' against it, plus the
+Each team's own numbers per game and its opponents' against it, its
+expected goals for and against from the play-by-play (pipeline/xg.py), plus the
 site's rating of the team (the one behind the odds) and how hard its schedule
 has been (the average rating of the teams it has played).
 """
@@ -9,12 +10,12 @@ from __future__ import annotations
 KEYS = ["sog", "fow", "fot", "ppg", "ppo", "pim", "hits", "blk", "gv", "tk"]
 
 
-def compute(teams: list[dict], games: list[dict], boxes: dict, rating: dict) -> dict:
+def compute(teams: list[dict], games: list[dict], boxes: dict, rating: dict, xg_scale: float = 1.0) -> dict:
     """{"teams": [...], "through": date}. `teams` are the standings rows;
     `games` the finished games that count; `rating` is every team's rating
     from pipeline/odds.py."""
     power = {t: i + 1 for i, t in enumerate(sorted(rating, key=lambda x: -rating[x]))}
-    acc = {t["id"]: {"gp": 0, "gf": 0, "ga": 0, "boxed": 0, "pp_games": 0, "opp_r": [],
+    acc = {t["id"]: {"gp": 0, "gf": 0, "ga": 0, "boxed": 0, "pp_games": 0, "opp_r": [], "xgf": 0.0, "xga": 0.0, "xg_games": 0,
                      "own": dict.fromkeys(KEYS, 0), "opp": dict.fromkeys(KEYS, 0)} for t in teams}
     through = None
     for g in games:
@@ -35,6 +36,11 @@ def compute(teams: list[dict], games: list[dict], boxes: dict, rating: dict) -> 
             a["ga"] += theirs - (1 if shootout and theirs > mine else 0)
             if g[other]["id"] in rating:
                 a["opp_r"].append(rating[g[other]["id"]])
+            chances = (box.get("adv") or {}).get("xg")
+            if box.get("status") == "F" and chances:         # expected goals: [away, home], from the play-by-play
+                a["xgf"] += chances[side == "home"] * xg_scale
+                a["xga"] += chances[side != "home"] * xg_scale
+                a["xg_games"] += 1
             own, opp = stats.get(side) or {}, stats.get(other) or {}
             if box.get("status") == "F" and own and opp:          # stats only from games with a box score
                 a["boxed"] += 1
@@ -64,6 +70,9 @@ def compute(teams: list[dict], games: list[dict], boxes: dict, rating: dict) -> 
             "pp_pct": share(o["ppg"], o["ppo"]) if a["pp_games"] else None,
             "pk_pct": share(p["ppo"] - p["ppg"], p["ppo"]) if a["pp_games"] else None,
             "fo_pct": share(o["fow"], o["fot"]),
+            "g_pct": share(a["gf"], a["gf"] + a["ga"]),
+            "xgf_gp": per(a["xgf"], a["xg_games"], 2), "xga_gp": per(a["xga"], a["xg_games"], 2),
+            "xg_pct": share(a["xgf"], a["xgf"] + a["xga"]),
             "hits_gp": per(o["hits"]), "blk_gp": per(o["blk"]), "pim_gp": per(o["pim"]),
             "gv_gp": per(o["gv"]), "tk_gp": per(o["tk"]),
             "power": power.get(t["id"]), "sos": round(sum(a["opp_r"]) / len(a["opp_r"]), 3) if a["opp_r"] else None,

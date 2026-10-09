@@ -89,8 +89,8 @@
     ["Home", "Record at home", function (t) { return t.home; }], ["Away", "Record on the road", function (t) { return t.away; }],
     ["L10", "Record in the last ten games", function (t) { return t.l10; }], ["Streak", "W wins, L losses, OT overtime losses in a row", function (t) { return t.streak || "–"; }]
   ];
-  function standTable(rows, label, numberOf, cutAfter, extra) {
-    var SCOLS = (extra || []).concat(STAND);
+  function standTable(rows, label, numberOf, cutAfter, extra, omit) {
+    var SCOLS = (extra || []).concat(STAND.filter(function (c) { return !omit || omit.indexOf(c[0]) < 0; }));
     var thead = el("thead", {}, [el("tr", {}, [el("th", { scope: "col", text: "#" }), el("th", { scope: "col", "class": "l", text: label })]
       .concat(SCOLS.map(function (c) { return el("th", { scope: "col", title: c[1], text: c[0] }); })))]);
     var body = el("tbody", {}, rows.map(function (t, i) {
@@ -116,9 +116,14 @@
     if (standView === "goat") {       // the same table as the standings, in GOAT order
       holder.appendChild(standTable(teams.sort(by("goat")), "Team", function (t) { return t.goat; }, null, [
         ["League", "Place in the league standings", function (t) { return t.rank; }],
-        ["SOS", "Strength of schedule: 1 is the hardest, by the average rating of the teams played", function (t) { return t.sos_rank; }]]));
+        ["SOS", "Strength of schedule: 1 is the hardest, by the average rating of the teams played", function (t) { return t.sos_rank; }],
+        ["xG%", "Expected-goal share: of the expected goals in its games, the share that were its own", function (t) { return t.xg_pct == null ? "–" : t.xg_pct.toFixed(1); }],
+        ["G%", "Goal share: of the goals in its games, the share it scored (shootouts aside)", function (t) { return t.g_pct == null ? "–" : t.g_pct.toFixed(1); }]],
+        ["RW", "Home", "Away"]));
+      // a team on a hot streak (it gets a boost) has its streak in green
+      Array.prototype.forEach.call(holder.querySelectorAll("tbody tr"), function (tr, i) { if (teams[i].hot) { tr.lastChild.className = "hot"; tr.lastChild.title = "On a hot streak: boosted in the ranking"; } });
       $("rank-note").textContent = W("standings.note_goat");
-      $("goat-note").textContent = W("standings.note_goat_how", { standings: G.standings_wrong, goat: G.goat_wrong });
+      $("goat-note").textContent = W("standings.note_goat_how", { from: G.hot_from });
       return;
     }
     if (standView === "league") holder.appendChild(standTable(teams.sort(by("rank")), "League"));
@@ -352,8 +357,14 @@
       ["g60", "Goals", "Goals per 60 minutes of ice time", fmt.d2], ["a160", "First assists", "The last pass before a goal, per 60 minutes", fmt.d2],
       ["p60", "Points", "Goals and assists per 60 minutes", fmt.d2], ["sog60", "Shots on goal", "Per 60 minutes", fmt.d1],
       ["shp", "Shooting percentage", "Share of his shots on goal that went in; only with at least 10 shots", fmt.pct]]],
-    ["Ice time, defense and discipline", [
-      ["toi_gp", "Ice time per game", "Minutes and seconds", fmt.min], ["hits60", "Hits", "Per 60 minutes", fmt.d1],
+    ["Chances, per 60 minutes", [
+      ["att60", "Shot attempts", "Every shot he tried, per 60 minutes: on goal, wide or blocked", fmt.d1],
+      ["ixg60", "Expected goals", "What his unblocked shots were worth, from where and how they were taken, per 60 minutes", fmt.d2],
+      ["gax60", "Goals above expected", "Goals minus expected goals, per 60 minutes: finishing. Only with at least 10 shots on goal", fmt.s2]]],
+    ["Ice time, faceoffs, defense and discipline", [
+      ["toi_gp", "Ice time per game", "Minutes and seconds", fmt.min],
+      ["fo_pct", "Faceoffs won", "Share of his faceoffs won; only for players who take at least five a game", fmt.pct],
+      ["hits60", "Hits", "Per 60 minutes", fmt.d1],
       ["blk60", "Blocked shots", "Per 60 minutes", fmt.d1], ["tk60", "Takeaways", "Per 60 minutes", fmt.d1],
       ["gv60", "Giveaways", "Per 60 minutes. Fewer is better, so a long bar means few giveaways", fmt.d1],
       ["pd60", "Penalties drawn", "Minor penalties drawn per 60 minutes", fmt.d2],
@@ -367,7 +378,8 @@
       ["g_sh", "On his team's power play", "Goals saved beyond average on shorthanded shots against", fmt.s2]]],
     ["Goaltending", [
       ["svp", "Save percentage", "Share of shots on goal saved", fmt.sv], ["gaa", "Goals against average", "Goals allowed per 60 minutes. Fewer is better, so a long bar means few goals", fmt.d2],
-      ["gsaa60", "Goals saved above average", "Per 60 minutes, against an average goalie on the same shots", fmt.s2],
+      ["gsax60", "Goals saved above expected", "Per 60 minutes: the expected goals of the shots he faced, from where and how they were taken, minus the goals he allowed", fmt.s2],
+      ["gsaa60", "Goals saved above average", "Per 60 minutes, against an average goalie on the same number of shots", fmt.s2],
       ["es_svp", "Even-strength save percentage", "", fmt.sv], ["pk_svp", "Save percentage against the power play", "", fmt.sv],
       ["sa60", "Shots faced", "Per 60 minutes: how busy he is", fmt.d1]]]
   ];
@@ -500,6 +512,45 @@
     return bits.length ? el("p", { "class": "pc-bio", text: bits.join(" · ") }) : null;
   }
 
+  // His game-by-game lines, newest first, from player/<id>.json.
+  // a skater's line: [game, date, opponent, at home, result, g, a, +/-, sog, hits, blk, pim, toi, xg]
+  // a goalie's:      [game, date, opponent, at home, result, sa, sv, ga, toi, decision, goals saved above expected]
+  var LOG_SK = [["G", "Goals", function (r) { return r[5]; }], ["A", "Assists", function (r) { return r[6]; }], ["PTS", "Points", function (r) { return r[5] + r[6]; }],
+    ["+/−", "Plus-minus", function (r) { return fmt.pm(r[7]); }], ["SOG", "Shots on goal", function (r) { return r[8]; }], ["Hits", "Hits", function (r) { return r[9]; }],
+    ["BLK", "Blocked shots", function (r) { return r[10]; }], ["PIM", "Penalty minutes", function (r) { return r[11]; }], ["TOI", "Time on ice", function (r) { return mmss(r[12]); }],
+    ["xG", "Expected goals: what his shots were worth", function (r) { return r[13] == null ? "" : r[13].toFixed(2); }]];
+  var LOG_G = [["Dec", "Decision: W win, L loss, O overtime or shootout loss", function (r) { return r[9] || ""; }], ["SA", "Shots against", function (r) { return r[5]; }],
+    ["SV", "Saves", function (r) { return r[6]; }], ["GA", "Goals against", function (r) { return r[7]; }],
+    ["Sv%", "Save percentage", function (r) { return r[5] ? (r[6] / r[5]).toFixed(3).replace(/^0/, "") : ""; }], ["TOI", "Time on ice", function (r) { return mmss(r[8]); }],
+    ["GSAx", "Goals saved above expected", function (r) { return r[10] == null ? "" : fmt.s2(r[10]); }]];
+  function gameLog(box, p) {
+    var cols = p.grp === "G" ? LOG_G : LOG_SK, all = false;
+    box.appendChild(el("p", { "class": "empty", text: "Loading…" }));
+    fetch("player/" + p.id + ".json", { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
+      function table() {
+        while (box.childNodes.length > 1) box.removeChild(box.lastChild);
+        var rows = all ? d.games : d.games.slice(0, 10);
+        var head = el("tr", {}, [el("th", { scope: "col", "class": "l", text: "Date" }), el("th", { scope: "col", "class": "l", text: "Opponent" }), el("th", { scope: "col", "class": "l", text: "Result" })]
+          .concat(cols.map(function (c) { return el("th", { scope: "col", title: c[1], text: c[0] }); })));
+        var body = el("tbody", {}, rows.map(function (r) {
+          var opp = T(r[2]);
+          return el("tr", {}, [el("td", { "class": "l", text: short(r[1]) }),
+            el("td", { "class": "l" }, [el("span", { "class": "tcell tm" }, [r[3] ? "vs" : "at", logo(r[2]), teamA(r[2], opp ? opp.short : r[2])])]),
+            el("td", { "class": "l" }, [el("a", { href: "#/game/" + r[0], "class": "res " + (r[4].charAt(0) === "W" ? "w" : "l"), text: r[4] })])]
+            .concat(cols.map(function (c) { return el("td", { "class": c[0] === "PTS" && r[5] + r[6] > 0 ? "strong" : "", text: String(c[2](r)) }); })));
+        }));
+        box.appendChild(el("div", { "class": "tablewrap", tabindex: "0", role: "region", "aria-label": p.name + " game by game, scrolls sideways" }, [
+          el("table", { "class": "ptable tptable logtable" }, [el("thead", {}, [head]), body])]));
+        if (d.games.length > 10) box.appendChild(el("p", { "class": "more" }, [el("button", { type: "button", "class": "morebtn",
+          text: all ? "Show the latest 10 only" : "Show all " + d.games.length + " games", onclick: function () { all = !all; table(); } })]));
+      }
+      table();
+    }).catch(function () {
+      while (box.childNodes.length > 1) box.removeChild(box.lastChild);
+      box.appendChild(el("p", { "class": "empty", text: "His game-by-game lines could not be loaded." }));
+    });
+  }
+
   function drawCard(id) {
     var holder = $("card");
     holder.innerHTML = "";
@@ -525,7 +576,8 @@
           el("b", { text: "–" }), el("span", { text: "Not ranked: too few games" })])
       ]));
       art.appendChild(el("p", { "class": "pc-impact" }, [el("b", { text: fmt.s1(p.impact) }), " points added this season, ", el("b", { text: fmt.s2(val(p, "impact_gp")) }), " per game."]));
-      var CARD = goalie ? CARD_G : CARD_SK;
+      var CARD = goalie ? CARD_G : CARD_SK, cols = el("div", { "class": "pc-cols" });
+      art.appendChild(cols);
       CARD.forEach(function (sec, i) {
         var rows = sec[1].filter(function (m) { return pctOf(p, m[0]) != null; });
         if (!rows.length) return;
@@ -540,17 +592,23 @@
             el("b", { "class": "ppct", text: String(pc) }),
             el("span", { "class": "pval", text: v == null ? "" : m[3](v) })]));
         });
-        art.appendChild(box);
+        cols.appendChild(box);
       });
       if (!p.regular) art.appendChild(el("p", { "class": "note", text: "Percentiles are given only to regulars: players with at least " + Math.round(100 * (goalie ? roster.weights.regular_goalie : roster.weights.regular_share)) + "% of their team's games." }));
       else if (pctOf(p, "impact_gp") == null) art.appendChild(el("p", { "class": "note", text: "Percentiles appear once enough " + many + " have played regularly to compare him with." }));
       var totals = goalie ? [["Games", p.gp], ["Starts", tot.gs], ["Wins", tot.w], ["Losses", tot.l], ["Overtime losses", tot.otl], ["Shots against", tot.sa], ["Saves", tot.sv],
-          ["Goals against", tot.ga], ["Shutouts", tot.so], ["Goals saved above average", fmt.s1(tot.gsaa)], ["Minutes", Math.round(tot.toi / 60)]]
+          ["Goals against", tot.ga], ["Shutouts", tot.so], ["Goals saved above average", fmt.s1(tot.gsaa)],
+          ["Expected goals against", tot.xga ? tot.xga.toFixed(1) : "–"], ["Goals saved above expected", tot.gsax == null ? "–" : fmt.s1(tot.gsax)], ["Minutes", Math.round(tot.toi / 60)]]
         : [["Games", p.gp], ["Goals", tot.g], ["Assists", tot.a], ["First assists", tot.a1], ["Points", tot.pts], ["Plus-minus", fmt.pm(tot.pm)], ["Shots on goal", tot.sog],
-          ["Power-play goals", tot.ppg], ["Hits", tot.hits], ["Blocked shots", tot.blk], ["Takeaways", tot.tk], ["Giveaways", tot.gv], ["Penalty minutes", tot.pim],
+          ["Shot attempts", tot.att || 0], ["Expected goals", tot.ixg == null ? "–" : tot.ixg.toFixed(1)],
+          ["Power-play goals", tot.ppg], ["Power-play points", tot.ppp || 0], ["Shorthanded points", tot.shpts || 0], ["Game-winning goals", tot.gwg || 0],
+          ["Faceoffs won", tot.fot ? tot.fow + " of " + tot.fot : "–"], ["Hits", tot.hits], ["Blocked shots", tot.blk], ["Takeaways", tot.tk], ["Giveaways", tot.gv], ["Penalty minutes", tot.pim],
           ["Penalties drawn", tot.pd], ["Minutes", Math.round(tot.toi / 60)]];
       art.appendChild(el("section", { "class": "pc-sec" }, [el("h2", { text: "Season totals" }),
         el("dl", { "class": "totals" }, totals.map(function (x) { return el("div", {}, [el("dt", { text: x[0] }), el("dd", { text: String(x[1]) })]); }))]));
+      var logBox = el("section", { "class": "pc-sec pc-log" }, [el("h2", { text: "Game by game" })]);
+      art.appendChild(logBox);
+      gameLog(logBox, p);
       art.appendChild(el("p", { "class": "note" }, ["The number beside each bar is his percentile among " + many + " who play regularly: 90 means better than 90% of them. The tick marks the middle." +
         (roster.through ? " Regular season, through games of " + short(roster.through) + ". " : " "),
         data.player_page ? el("a", { href: data.player_page + p.id, rel: "noopener", text: W("players.nhl_link") }) : null]));
@@ -580,13 +638,14 @@
     ["ga_gp", "GA/G", "Goals against per game. Lower is better", function (t) { return t.ga_gp; }, fmt.d2, 0],
     ["sf_gp", "SF/G", "Shots on goal per game", function (t) { return t.sf_gp; }, fmt.d1, 1],
     ["sa_gp", "SA/G", "Shots on goal against per game. Lower is better", function (t) { return t.sa_gp; }, fmt.d1, 0],
+    ["xgf_gp", "xGF/G", "Expected goals per game: what the team's chances were worth", function (t) { return t.xgf_gp; }, fmt.d2, 1],
+    ["xga_gp", "xGA/G", "Expected goals against per game. Lower is better", function (t) { return t.xga_gp; }, fmt.d2, 0],
+    ["xg_pct", "xG%", "Expected-goal share: the team's share of the expected goals in its games", function (t) { return t.xg_pct; }, fmt.d1, 1],
     ["sh_pct", "Sh%", "Share of the team's shots on goal that went in", function (t) { return t.sh_pct; }, fmt.d1, 1],
     ["sv_pct", "Sv%", "Share of opponents' shots on goal kept out, empty-net goals included", function (t) { return t.sv_pct; }, function (v) { return v.toFixed(3).replace(/^0/, ""); }, 1],
     ["pp_pct", "PP%", "Power plays that ended in a goal", function (t) { return t.pp_pct; }, fmt.d1, 1],
     ["pk_pct", "PK%", "Opponents' power plays killed off", function (t) { return t.pk_pct; }, fmt.d1, 1],
     ["fo_pct", "FO%", "Faceoffs won", function (t) { return t.fo_pct; }, fmt.d1, 1],
-    ["hits_gp", "Hits/G", "Hits per game", function (t) { return t.hits_gp; }, fmt.d1, 1],
-    ["blk_gp", "BLK/G", "Blocked shots per game", function (t) { return t.blk_gp; }, fmt.d1, 1],
     ["pim_gp", "PIM/G", "Penalty minutes per game. Lower is better", function (t) { return t.pim_gp; }, fmt.d1, 0],
     ["power", "Rating", "Where this site's rating (the one behind the odds) places the team", function (t) { return t.power; }, String, 0],
     ["sos_rank", "SOS", "Strength of schedule: 1 is the hardest, by the average rating of the teams played", function (t) { return t.sos_rank; }, String, 0]
@@ -713,7 +772,9 @@
   function fillCompare(cmp, g, d) {
     var A = (d.tstats || {}).away || {}, H = (d.tstats || {}).home || {};
     function share(t) { return t.fot ? 100 * t.fow / t.fot : null; }
-    var rows = [["Shots on goal", A.sog, H.sog, String, 1], ["Faceoffs won", share(A), share(H), function (v) { return Math.round(v) + "%"; }, 1],
+    var scale = (data.xg || {}).scale || 1, chances = d.xg || [];
+    var rows = [["Expected goals", chances[0] == null ? null : chances[0] * scale, chances[1] == null ? null : chances[1] * scale, fmt.d2, 1],
+      ["Shots on goal", A.sog, H.sog, String, 1], ["Faceoffs won", share(A), share(H), function (v) { return Math.round(v) + "%"; }, 1],
       ["Power play", A.ppo == null ? null : A.ppg, H.ppo == null ? null : H.ppg, null, 1], ["Hits", A.hits, H.hits, String, 1], ["Blocked shots", A.blk, H.blk, String, 1],
       ["Takeaways", A.tk, H.tk, String, 1], ["Giveaways", A.gv, H.gv, String, 0], ["Penalty minutes", A.pim, H.pim, String, 0]];
     cmp.innerHTML = "";
@@ -808,7 +869,9 @@
 
   // ---- a team's page: its games, its stats and its players ----
   var TSTATS = [   // key, label, format, higher is better
-    ["gf_gp", "Goals per game", fmt.d2, 1], ["ga_gp", "Goals against per game", fmt.d2, 0], ["sf_gp", "Shots per game", fmt.d1, 1],
+    ["gf_gp", "Goals per game", fmt.d2, 1], ["ga_gp", "Goals against per game", fmt.d2, 0], ["g_pct", "Goal share", fmt.pct, 1],
+    ["xgf_gp", "Expected goals per game", fmt.d2, 1], ["xga_gp", "Expected goals against per game", fmt.d2, 0], ["xg_pct", "Expected-goal share", fmt.pct, 1],
+    ["sf_gp", "Shots per game", fmt.d1, 1],
     ["sa_gp", "Shots against per game", fmt.d1, 0], ["sh_pct", "Shooting", fmt.pct, 1], ["sv_pct", "Save percentage", function (v) { return v.toFixed(3).replace(/^0/, ""); }, 1],
     ["pp_pct", "Power play", fmt.pct, 1], ["pk_pct", "Penalty kill", fmt.pct, 1], ["fo_pct", "Faceoffs won", fmt.pct, 1],
     ["hits_gp", "Hits per game", fmt.d1, 1], ["blk_gp", "Blocked shots per game", fmt.d1, 1], ["pim_gp", "Penalty minutes per game", fmt.d1, 0]

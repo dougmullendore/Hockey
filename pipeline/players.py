@@ -21,8 +21,14 @@ A goalie's Impact is the goals he saved beyond what an average goalie would
 have on the same shots, counted separately at even strength, against the
 power play and shorthanded, at 0.75 a goal like a skater's goal.
 
-It is a box-score measure. It cannot see shot quality, who else was on the
-ice, or the strength of the opponent.
+Impact is a box-score measure. It cannot see shot quality, who else was on
+the ice, or the strength of the opponent.
+
+Beside Impact, each card carries numbers from the play-by-play (see
+pipeline/xg.py): a skater's shot attempts and expected goals, and how many
+more goals he scored than those chances were worth; his faceoffs; and for a
+goalie the goals he saved above expected, which does account for where the
+shots came from.
 """
 from __future__ import annotations
 
@@ -37,7 +43,9 @@ MIN_SHOTS = 10               # no shooting percentage on fewer shots than this
 GROUP = {"C": "F", "L": "F", "R": "F", "D": "D", "G": "G"}
 PARTS = ["goals", "assists", "shots", "defense", "discipline", "onice"]
 G_PARTS = ["g_ev", "g_pk", "g_sh"]
-SUM = ["g", "a", "a1", "pm", "pim", "hits", "ppg", "sog", "toi", "blk", "shifts", "gv", "tk", "pt", "pd"]
+SUM = ["g", "a", "a1", "pm", "pim", "hits", "ppg", "sog", "toi", "blk", "shifts", "gv", "tk", "pt", "pd", "ppp", "shpts", "gwg"]
+ADV = ["att", "fen", "ixg", "fow", "fot"]          # from the play-by-play: attempts, unblocked attempts, expected goals, faceoffs won and taken
+MIN_FACEOFFS = 5             # a game: no faceoff percentage for players who take fewer
 G_SUM = ["sa", "sv", "ga", "toi", "es_sa", "es_sv", "pp_sa", "pp_sv", "sh_sa", "sh_sv"]
 
 # (key, higher is better, who is ranked on it: skaters, goalies, or skaters with enough shots)
@@ -48,9 +56,10 @@ METRICS = [
     ("g60", True, "sk"), ("a160", True, "sk"), ("p60", True, "sk"), ("sog60", True, "sk"), ("shp", True, "shooter"),
     ("toi_gp", True, "sk"), ("hits60", True, "sk"), ("blk60", True, "sk"), ("tk60", True, "sk"), ("gv60", False, "sk"),
     ("pd60", True, "sk"), ("pim60", False, "sk"),
+    ("ixg60", True, "sk"), ("gax60", True, "shooter"), ("att60", True, "sk"), ("fo_pct", True, "faceoff"),
     ("g_ev", True, "g"), ("g_pk", True, "g"), ("g_sh", True, "g"),
     ("svp", True, "g"), ("gaa", False, "g"), ("gsaa60", True, "g"), ("es_svp", True, "g"), ("pk_svp", True, "g"),
-    ("sa60", True, "g"),
+    ("sa60", True, "g"), ("gsax60", True, "g"),
 ]
 
 
@@ -64,13 +73,21 @@ def _events(p: dict) -> dict:
             "poss": p["tk"] - p["gv"], "pen": p["pd"] - p["pt"], "pm": p["pm"]}
 
 
-def compute(teams: list[dict], games: list[dict], boxes: dict, people: dict) -> dict:
+def _result(g: dict, side: str) -> str:
+    """"W 4-3 OT" for the team on `side`."""
+    mine, theirs = g[side]["score"], g["home" if side == "away" else "away"]["score"]
+    return f"{'W' if mine > theirs else 'L'} {mine}-{theirs}" + (f" {g['end']}" if g.get("end") in ("OT", "SO") else "")
+
+
+def compute(teams: list[dict], games: list[dict], boxes: dict, people: dict, xg_scale: float = 1.0) -> dict:
     """Every player who has played, with totals, rates, Impact and percentiles.
     `teams` are the standings rows; `games` the finished games that count;
-    `people` is {player id: his details from the rosters}."""
+    `people` is {player id: his details from the rosters}; `xg_scale` brings
+    the season's expected goals in line with the goals actually scored.
+    "logs" in the result is each player's game-by-game lines, newest first."""
     by_team = {t["id"]: t for t in teams}
     team_games = {t: 0 for t in by_team}
-    sk, gk = {}, {}
+    sk, gk, logs = {}, {}, {}
     for g in sorted(games, key=lambda g: (g["date"], g["start"] or 0, g["id"])):
         box = boxes.get(str(g["id"]))
         if g["state"] != "final" or not box or box.get("status") != "F":
@@ -80,16 +97,24 @@ def compute(teams: list[dict], games: list[dict], boxes: dict, people: dict) -> 
             if team not in by_team or not (box.get(side) or {}).get("sk"):
                 continue
             team_games[team] += 1
+            adv = box.get("adv") or {}
+            other = "home" if side == "away" else "away"
+            where = [g["id"], g["date"], g[other]["id"], int(side == "home"), _result(g, side)]
             for row in box[side]["sk"]:
                 r = dict(zip(SK, row))
-                p = sk.setdefault(r["id"], {"id": r["id"], "gp": 0, **{s: 0 for s in SUM}})
+                p = sk.setdefault(r["id"], {"id": r["id"], "gp": 0, **{s: 0 for s in SUM + ADV}})
                 p.update(team=team, name=r["name"], num=r["num"], pos=r["pos"])      # as of his latest game
                 p["gp"] += 1
                 for s in SUM:
-                    p[s] += r[s] or 0
+                    p[s] += r.get(s) or 0
+                extra = (adv.get("sk") or {}).get(str(r["id"])) or [0, 0, 0.0, 0, 0]
+                for s, v in zip(ADV, extra):
+                    p[s] += v * (xg_scale if s == "ixg" else 1)
+                logs.setdefault(r["id"], []).append(where + [r["g"], r["a"], r["pm"], r["sog"], r["hits"], r["blk"], r["pim"], r["toi"],
+                                                             round(extra[2] * xg_scale, 2) if adv else None])
             for row in box[side]["g"]:
                 r = dict(zip(GK, row))
-                p = gk.setdefault(r["id"], {"id": r["id"], "gp": 0, "gs": 0, "w": 0, "l": 0, "otl": 0, "so": 0,
+                p = gk.setdefault(r["id"], {"id": r["id"], "gp": 0, "gs": 0, "w": 0, "l": 0, "otl": 0, "so": 0, "xga": 0.0, "xg_ga": 0,
                                             **{s: 0 for s in G_SUM}})
                 p.update(team=team, name=r["name"], num=r["num"], pos="G")
                 p["gp"] += 1
@@ -99,6 +124,12 @@ def compute(teams: list[dict], games: list[dict], boxes: dict, people: dict) -> 
                 p["so"] += 1 if r["start"] and r["ga"] == 0 and r["toi"] >= 3540 and r["dec"] == "W" else 0
                 for s in G_SUM:
                     p[s] += r[s] or 0
+                faced = (adv.get("g") or {}).get(str(r["id"]))
+                if faced:
+                    p["xga"] += faced[0] * xg_scale
+                    p["xg_ga"] += faced[1]
+                logs.setdefault(r["id"], []).append(where + [r["sa"], r["sv"], r["ga"], r["toi"], r["dec"],
+                                                             round(faced[0] * xg_scale - faced[1], 2) if faced else None])
 
     for p in sk.values():
         p["grp"] = GROUP.get(p["pos"], "F")
@@ -136,9 +167,12 @@ def compute(teams: list[dict], games: list[dict], boxes: dict, people: dict) -> 
              "g60": p["g"] / hours, "a160": p["a1"] / hours, "p60": (p["g"] + p["a"]) / hours, "sog60": p["sog"] / hours,
              "shp": 100 * p["g"] / p["sog"] if p["sog"] else None, "toi_gp": t / gp / 60,
              "hits60": p["hits"] / hours, "blk60": p["blk"] / hours, "tk60": p["tk"] / hours, "gv60": p["gv"] / hours,
-             "pd60": p["pd"] / hours, "pim60": p["pim"] / hours}
-        can = {"all": True, "sk": True, "g": False, "shooter": p["sog"] >= MIN_SHOTS}
-        tot = {k: p[k] for k in SUM} | {"pts": p["g"] + p["a"], "a2": p["a"] - p["a1"]}
+             "pd60": p["pd"] / hours, "pim60": p["pim"] / hours,
+             "ixg60": p["ixg"] / hours if p["fen"] else None, "gax60": (p["g"] - p["ixg"]) / hours if p["fen"] else None,
+             "att60": p["att"] / hours if p["att"] else None, "fo_pct": 100 * p["fow"] / p["fot"] if p["fot"] else None}
+        can = {"all": True, "sk": True, "g": False, "shooter": p["sog"] >= MIN_SHOTS, "faceoff": p["fot"] >= MIN_FACEOFFS * gp}
+        tot = {k: p[k] for k in SUM} | {"pts": p["g"] + p["a"], "a2": p["a"] - p["a1"], "att": p["att"], "fen": p["fen"],
+                                        "ixg": round(p["ixg"], 1), "fow": p["fow"], "fot": p["fot"]}
         out.append({**p, "impact": impact, "_v": v, "_can": can, "tot": tot})
     for p in every:
         saved = {key: p[key + "_sa"] * let_in[key] - (p[key + "_sa"] - p[key + "_sv"]) for key in ("es", "pp", "sh")}
@@ -149,9 +183,10 @@ def compute(teams: list[dict], games: list[dict], boxes: dict, people: dict) -> 
              "gsaa60": sum(saved.values()) / hours,
              "es_svp": 100 * p["es_sv"] / p["es_sa"] if p["es_sa"] else None,
              "pk_svp": 100 * p["pp_sv"] / p["pp_sa"] if p["pp_sa"] >= 5 else None,
-             "sa60": p["sa"] / hours}
-        can = {"all": True, "sk": False, "g": True, "shooter": False}
-        tot = {k: p[k] for k in G_SUM + ["gs", "w", "l", "otl", "so"]} | {"gsaa": round(sum(saved.values()), 1)}
+             "sa60": p["sa"] / hours, "gsax60": (p["xga"] - p["xg_ga"]) / hours if p["xga"] else None}
+        can = {"all": True, "sk": False, "g": True, "shooter": False, "faceoff": False}
+        tot = {k: p[k] for k in G_SUM + ["gs", "w", "l", "otl", "so"]} | {
+            "gsaa": round(sum(saved.values()), 1), "xga": round(p["xga"], 1), "gsax": round(p["xga"] - p["xg_ga"], 1) if p["xga"] else None}
         out.append({**p, "impact": impact, "_v": v, "_can": can, "tot": tot})
 
     # Percentiles: against regulars at the same position, on the things that position does.
@@ -194,7 +229,7 @@ def compute(teams: list[dict], games: list[dict], boxes: dict, people: dict) -> 
         if bio:
             row["bio"] = bio
         rows.append(row)
-    return {"metrics": keys, "players": rows,
+    return {"metrics": keys, "players": rows, "logs": {pid: rows_[::-1] for pid, rows_ in logs.items()},
             "regulars": sum(n for g, n in seen.items() if g != "G"), "pos_regulars": seen,
             "teams": [{"id": t["id"], "name": t["name"], "rank": t["rank"], "games": team_games[t["id"]]} for t in teams],
             "baseline": {"F": {k: _r(v * 3600, 4) for k, v in base["F"].items()}, "D": {k: _r(v * 3600, 4) for k, v in base["D"].items()},

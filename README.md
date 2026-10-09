@@ -36,8 +36,8 @@ and goalies.
 Every game links to its own page (`#/game/<number>`). At the top is a **score
 card**: the score, the goals period by period, each team's chance of winning
 (before the game, for a finished one) and a side-by-side team comparison
-(shots, faceoffs, power play, hits, blocked shots, takeaways, giveaways,
-penalty minutes). Below it are the goals in order with who assisted, the
+(expected goals, shots, faceoffs, power play, hits, blocked shots, takeaways,
+giveaways, penalty minutes). Below it are the goals in order with who assisted, the
 three stars, and both teams' box scores: every skater's goals, assists,
 plus-minus, shots, hits, blocks, penalty minutes, giveaways, takeaways,
 faceoff percentage, shifts and ice time, and every goalie's shots, saves and
@@ -56,9 +56,10 @@ decision. Player names link to their cards.
 ## Teams
 
 The **Teams** page (`pipeline/teams.py`) shows each team's record and points,
-goals for and against per game, shots for and against per game, shooting and
-save percentage, power play and penalty kill, faceoffs won, hits, blocked
-shots and penalty minutes per game, where the site's rating places the team,
+goals for and against per game, shots for and against per game, expected
+goals for and against per game and its share of them, shooting and save
+percentage, power play and penalty kill, faceoffs won and penalty minutes
+per game, where the site's rating places the team,
 and strength of schedule (the average rating of its opponents, ranked among
 the 32). Regular season only. A shootout win adds a goal to the final score
 but is not counted as a goal scored.
@@ -86,6 +87,12 @@ and goalies on their own, and each name opens a card.
   goalie 20%. Part-time players are listed (tick the box) but not ranked.
 - A traded player is one player: his numbers from both teams are added up
   and he is listed with his new team.
+- **Each card** also shows, from the play-by-play: a skater's shot attempts
+  and expected goals per 60 minutes, his goals above expected (finishing) and
+  his faceoff percentage; a goalie's goals saved above expected, which does
+  account for where the shots came from. Season totals include power-play and
+  shorthanded points, game-winning goals, shot attempts, expected goals and
+  faceoffs, and at the bottom is every game he has played, newest first.
 
 What it cannot do: it sees only the box score, so it knows nothing about shot
 quality, who else was on the ice, or how strong the opponent was. Early in
@@ -111,21 +118,51 @@ code (DAL, COL) is shown in its place. To remove them, set `LOGO_URL = ""` in
 ## GOAT ranking
 
 The Standings page's GOAT Ranking button shows the site's own ranking of the
-32 teams (`pipeline/goat.py`), redone on every run. Four things decide it,
-most important first:
+32 teams (`pipeline/goat.py`), redone on every run. Five things decide it:
 
-1. **Head to head.** A team is ranked above one it leads in their season
-   series, unless the other three factors say the gap between them is wide
-   (`GOAT_HEAD_TO_HEAD`). Results that form a circle cannot all be honored;
-   the ranking keeps as many as it can.
-2. **Strength of schedule:** the average rating of the teams it has played
-   (the ratings behind the odds).
-3. **The standings:** a team gets credit for its place in the league table.
-4. **Record:** its share of games won.
+1. **Record:** the share of the possible points a team has won (weight 30%).
+2. **Expected-goal share:** of the expected goals in its games, the share
+   that were its own (30%). This says who has had the better chances,
+   whatever the bounces.
+3. **Goal share:** of the goals in its games, the share it scored (25%). A
+   shootout win is not a goal.
+4. **Strength of schedule:** the average rating of the teams it has played so
+   far, each game counted once (15%). The ratings are the ones behind the odds.
+5. **A hot streak:** a team that has won three or more in a row gets 0.02
+   added for each win in the streak, up to 0.10.
 
-Factors 2 to 4 are combined with the weights in `GOAT_WEIGHTS` (0.5, 0.3,
-0.2). The ranking is shown as the same table as the standings, in GOAT
-order, with each team's place in the league and its strength of schedule.
+For each of the first four a team gets its place among the 32, from 0 at the
+bottom to 1 at the top, and those are combined with the weights above
+(`GOAT_WEIGHTS` in `pipeline/config.py`; the streak settings are the
+`GOAT_HOT_` lines beside it). The ranking is shown as a table like the
+standings, with each team's place in the league, its strength of schedule,
+its expected-goal and goal shares, and its streak in green when it is hot.
+
+## Expected goals
+
+The league's play-by-play gives every shot's place on the ice, its type and
+what happened just before it. `pipeline/xg.py` turns that into each shot's
+chance of going in: a shot from the slot might be worth 0.20 of a goal, one
+from the blue line 0.02. Added up, they say what a team, a player or a goalie
+"should" have scored or allowed on the chances there were.
+
+- It counts unblocked shots (goals, saves and misses); blocked shots and
+  shootouts are left out. A penalty shot is worth a flat 0.30, and a shot at
+  an empty net has its own simple estimate from distance.
+- The model is 150 small decision trees, fitted once on five seasons of shots
+  (2021-22 to 2025-26) and kept in `model/xg.json`, so the job needs nothing
+  installed to use it. Fitted on the first four of those seasons and tested
+  on the fifth, it ranked a goal above a non-goal 76% of the time (77.5% with
+  empty-net shots) and expected 8,941 goals where 8,572 were scored, 4% high.
+- Because it runs a few percent high or low in any one season, the season's
+  numbers are scaled so the league's expected goals equal the goals actually
+  scored (`XG_STEADY_GOALS` in `pipeline/config.py` keeps the scale near 1
+  early in the season).
+- It sees where and how, not who: it does not know the shooter's skill, a
+  screen in front, or whether the goalie was set.
+
+Expected goals appear on the Teams page (for, against and share), in the GOAT
+ranking, in each game's team comparison, and on player cards.
 
 ## Odds
 
@@ -172,7 +209,7 @@ The file `.github/workflows/update.yml` tells GitHub when to run:
 
 | When | What it does |
 | --- | --- |
-| Every morning about 5:47am Central, and again about 11:47am | Schedule, scores, channels, standings, box scores, rosters, ratings and the GOAT ranking |
+| Every morning about 5:47am Central, and again about 11:47am | Schedule, scores, channels, standings, box scores, play-by-play, rosters, ratings and the GOAT ranking |
 | Every night about 3:17am Central | A third full refresh, once the late games on the west coast are over |
 | Every 5 minutes, 11am to 2am Central, September to June | Scores, box scores and standings while a game is under way |
 | Whenever the code changes, or you press **Run workflow** on the **Actions** tab | Everything, straight away (after running the tests) |
@@ -206,7 +243,9 @@ leaves the old site up; GitHub emails you, and the run log names the line.
 | `pipeline/nhl.py` | Reads the league's feed: schedule, standings, box scores, rosters |
 | `pipeline/players.py` | Rates the players against each other and works out percentiles |
 | `pipeline/teams.py` | Adds up each team's stats from the box scores |
-| `pipeline/goat.py` | The GOAT ranking: a score rearranged to respect head-to-head results |
+| `pipeline/goat.py` | The GOAT ranking: record, schedule, expected-goal share, goal share and a hot-streak boost |
+| `pipeline/xg.py` | Expected goals: reads the play-by-play and gives each shot its chance of scoring |
+| `model/xg.json` | The expected-goals model itself |
 | `pipeline/odds.py` | Rates every team from results and turns two ratings into a chance of winning |
 | `pipeline/web.py` | Downloading, with retries |
 | `pipeline/run.py` | The job: update everything stored, then build the page |
@@ -219,7 +258,8 @@ Run the tests with `python tests/run_local.py`.
 Two side branches of this repository hold what the job produces:
 
 - `state`: the season's games (`schedule.json`), the standings
-  (`standings.json`), the box scores (`box.json`), players' details
+  (`standings.json`), the box scores with what was taken from each game's
+  play-by-play (`box.json`), players' details
   (`people.json`), the ratings (`ratings.json`), and what happened on the
   last run (`status.json`, `logs/last_run.log`).
 - `gh-pages`: the finished page.

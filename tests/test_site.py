@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pipeline import config, goat, nhl, odds, players, run, teams
+from pipeline import config, goat, nhl, odds, players, run, teams, xg
 
 FIX = Path(__file__).parent / "fixtures"
 UTC = dt.timezone.utc
@@ -201,6 +201,9 @@ def test_a_box_score_is_read():
     assert [p["id"] for p in away] == [11, 13]                          # the forward who did not play is left out
     assert away[0]["name"] == "N. Schmaltz" and away[0]["toi"] == 900 and away[0]["fo"] == 80 and away[1]["toi"] == 1173
     assert (home[21]["g"], home[21]["a"], home[21]["a1"], home[21]["ppg"]) == (1, 1, 1, 1)
+    # points on the power play, and the game-winning goal: Boston's second in a 2-1 win
+    assert (home[21]["ppp"], home[22]["ppp"], home[23]["ppp"], away[0]["ppp"]) == (1, 1, 1, 0)
+    assert (home[23]["gwg"], home[21]["gwg"], away[0]["gwg"]) == (1, 0, 0) and "adv" not in b
     assert (home[22]["a"], home[22]["a1"]) == (2, 1) and (home[23]["a"], home[23]["a1"]) == (1, 0)
     # minor penalties: taken and drawn, a double minor counts twice, majors and bench minors do not count
     assert (away[1]["pt"], away[1]["pd"]) == (1, 0) and (home[21]["pt"], home[21]["pd"]) == (0, 1)
@@ -222,6 +225,10 @@ def test_a_box_score_without_its_summary_is_kept_but_marked():
     box, _, _ = game_docs("LIVE")
     b = nhl.parse_box(box, None, None)
     assert b["status"] == "L" and not b["full"] and b["goals"] == [] and b["line"] == []
+    assert not run.complete(b) and not run.complete(nhl.parse_box(*game_docs())) and not run.complete(None)
+    whole = nhl.parse_box(*game_docs(), plays=fixture("play-by-play_2025020500.json.gz"))
+    assert run.complete(whole) and whole["adv"]["xg"][1] > whole["adv"]["xg"][0]
+    assert not run.complete({**whole, "adv": {**whole["adv"], "v": "an older model"}})
     assert b["tstats"]["away"]["sog"] == 37 and b["tstats"]["home"]["hits"] == 3     # added up from the players
     assert "ppo" not in b["tstats"]["home"]
 
@@ -294,15 +301,62 @@ def test_odds():
     assert seed["season"] == 2025 and len(seed["ratings"]) == 32 and abs(sum(seed["ratings"].values())) < 0.5
 
 
-def test_goat_ranking_respects_head_to_head():
-    games = [played(1, "2026-10-01", "AAA", "BBB", 1, 5), played(2, "2026-10-02", "CCC", "AAA", 0, 3), played(3, "2026-10-03", "BBB", "CCC", 2, 3),
-             played(4, "2026-10-04", "BBB", "AAA", 3, 1)]
-    h2h = goat.head_to_head(games)
-    assert h2h[("BBB", "AAA")][:2] == [2, 0] and h2h[("AAA", "BBB")][:2] == [0, 2] and h2h[("CCC", "BBB")][:2] == [1, 0]
-    ranking = goat.rank(games, {"AAA": 0.0, "BBB": 0.0, "CCC": 0.0}, {"AAA", "BBB", "CCC"}, {"AAA": 1, "BBB": 2, "CCC": 3})
-    order = ranking["order"]
-    assert sorted(order) == ["AAA", "BBB", "CCC"] and order.index("BBB") < order.index("AAA")
-    assert goat.contradictions(["AAA", "BBB", "CCC"], games, {"AAA", "BBB", "CCC"}) == 1 + 1     # B over A, and C over B
+def test_goat_ranking():
+    table = nhl.parse_standings({"standings": [standing("AAA", "Alpha Aces", 1, 3, 0, 0), standing("BBB", "Beta Bears", 2, 2, 1, 0),
+                                               standing("CCC", "Gamma Cats", 3, 0, 4, 0)]})
+    games = [played(1, "2026-10-01", "CCC", "AAA", 1, 5), played(2, "2026-10-02", "CCC", "BBB", 0, 3), played(3, "2026-10-03", "BBB", "AAA", 2, 3, "SO"),
+             played(4, "2026-10-04", "CCC", "BBB", 1, 2), played(5, "2026-10-05", "CCC", "AAA", 0, 1)]
+    assert goat.win_streaks(games) == {"AAA": 3, "BBB": 1, "CCC": 0}
+    assert goat.hot_boost(2) == 0 and goat.hot_boost(3) == 3 * config.GOAT_HOT_STEP and goat.hot_boost(40) == config.GOAT_HOT_MAX
+    chances = {"AAA": [9.0, 5.0], "BBB": [8.0, 6.0], "CCC": [5.0, 11.0]}
+    r = goat.rank(games, {"AAA": 0.2, "BBB": 0.0, "CCC": -0.2}, table, chances)
+    assert r["order"] == ["AAA", "BBB", "CCC"] and r["streak"]["AAA"] == 3 and r["boost"]["AAA"] > 0 == r["boost"]["BBB"]
+    assert abs(r["xg_pct"]["AAA"] - 9 / 14) < 1e-9 and abs(r["goal_pct"]["AAA"] - 8 / 11) < 1e-9      # the shootout win is not a goal
+    assert r["sos"]["CCC"] > r["sos"]["AAA"]                             # the bottom team has played only the top two
+    assert abs(sum(config.GOAT_WEIGHTS.values()) - 1) < 1e-9 and set(config.GOAT_WEIGHTS) == {"record", "sos", "xg", "goals"}
+    # better chances lift a team: swap the expected goals of the top two and the gap between them narrows
+    swapped = goat.rank(games, {"AAA": 0.2, "BBB": 0.0, "CCC": -0.2}, table, {**chances, "AAA": chances["BBB"], "BBB": chances["AAA"]})
+    assert swapped["score"]["AAA"] - swapped["score"]["BBB"] < r["score"]["AAA"] - r["score"]["BBB"]
+    # with no play-by-play yet every team is level on chances and the rest decides
+    assert goat.rank(games, {}, table, {})["order"] == ["AAA", "BBB", "CCC"]
+
+
+# -------------------------------------------------------- expected goals --
+def shot(x, y, **more):
+    s = {"home": 1, "shooter": 1, "goalie": 2, "goal": 0, "on_goal": 1, "x": x, "y": y, "shot_type": "wrist", "mine": 5, "theirs": 5,
+         "empty": 0, "penalty_shot": 0, "period": 1, "secs": 600, "prev_type": "faceoff", "prev_same": 1, "since": 30.0, "prev_x": 0.0, "prev_y": 0.0}
+    s.update(more)
+    return s
+
+
+def test_expected_goals_make_sense():
+    m = xg.model()
+    assert m["version"] and len(m["trees"]) == 150 and len(xg.FEATURES) == len(xg.features(shot(60, 0)))
+    slot, point, corner = xg.chance(shot(80, 0)), xg.chance(shot(30, 20)), xg.chance(shot(85, 38))
+    assert 0.10 < slot < 0.45 and point < 0.04 and corner < 0.04 and slot > 5 * point
+    rebound = xg.chance(shot(80, 4, prev_type="shot-on-goal", since=2.0, prev_x=70.0, prev_y=-15.0))
+    assert rebound > xg.chance(shot(80, 4))
+    assert xg.chance(shot(60, 0, mine=5, theirs=4)) > xg.chance(shot(60, 0))                    # a power play
+    assert xg.chance(shot(-40, 0, empty=1, goalie=None)) > 0.3 > xg.chance(shot(-40, 0))        # an empty net from his own end
+    assert xg.chance(shot(60, 0, penalty_shot=1)) == xg.PENALTY_SHOT
+    assert all(0 < xg.chance(shot(x, y)) < 1 for x in range(-99, 100, 9) for y in range(-42, 43, 7))
+
+
+def test_a_real_play_by_play_is_read():
+    """Montreal at the Rangers, 2025-26: the Rangers won 5-4."""
+    doc = fixture("play-by-play_2025020500.json.gz")
+    evs = xg.events(doc)
+    taken = [e for e in evs if e["type"] in xg.UNBLOCKED and e["x"] is not None]
+    assert sum(e["x"] > 0 for e in taken) > 0.9 * len(taken)            # every team is turned to shoot toward +x
+    shots = xg.shots(evs)
+    assert sum(s["goal"] for s in shots) == 9 and len(shots) == 9 + 38 + 43
+    a = xg.summarize(doc)
+    assert a["v"] == xg.model()["version"] and 2.0 < a["xg"][0] < 3.5 and 4.0 < a["xg"][1] < 6.0
+    assert abs(sum(v[2] for v in a["sk"].values()) - sum(a["xg"])) < 0.05
+    assert sum(v[1] for v in a["sk"].values()) == len(shots) and sum(v[0] for v in a["sk"].values()) == len(shots) + 43     # plus the blocked ones
+    assert sum(v[3] for v in a["sk"].values()) == 49 and sum(v[4] for v in a["sk"].values()) == 98                # 49 faceoffs, two players in each
+    assert len(a["g"]) == 2 and sum(g[1] for g in a["g"].values()) == 8        # one of the nine goals was into an empty net
+    assert all(v[0] >= v[1] and v[4] >= v[3] for v in a["sk"].values())
 
 
 # ------------------------------------------------------- players and teams --
@@ -311,6 +365,10 @@ def small_season():
     table = nhl.parse_standings({"standings": [standing("BOS", "Boston Bruins", 1, 2, 0, 0), standing("UTA", "Utah Mammoth", 2, 0, 2, 0)]})
     games = [played(2026020056, "2026-10-08", "UTA", "BOS", 1, 2), played(2026020090, "2026-10-10", "UTA", "BOS", 1, 2)]
     boxes = {str(g["id"]): nhl.parse_box(*game_docs()) for g in games}
+    for box in boxes.values():           # what the play-by-play adds: expected goals [away, home], skaters' attempts and faceoffs, goalies' chances faced
+        box["adv"] = {"v": xg.model()["version"], "xg": [1.5, 3.0],
+                      "sk": {"21": [6, 4, 1.2, 0, 0], "22": [3, 2, 0.6, 9, 12], "11": [5, 4, 1.0, 3, 12]},
+                      "g": {"24": [1.5, 1], "14": [3.0, 2]}}
     return table, games, boxes
 
 
@@ -334,6 +392,16 @@ def test_players_are_rated_against_their_position():
     assert by[24]["impact"] > 0 > by[14]["impact"] and by[24]["rank"] == 1 and by[14]["rank"] == 2      # goalies ranked on their own
     assert by[14]["tot"]["l"] == 2 and rated["regulars"] == 5 and rated["pos_regulars"] == {"F": 3, "D": 2, "G": 2}
     assert all(p["regular"] for p in rated["players"]) and by[21]["pct"][0] is None       # too few players for percentiles
+    # from the play-by-play: attempts, expected goals, finishing, faceoffs; goals saved above expected
+    assert by[21]["tot"]["att"] == 12 and by[21]["tot"]["ixg"] == 2.4 and abs(v(21, "ixg60") - 4.8) < 1e-6 and abs(v(21, "gax60") + 0.8) < 1e-6
+    assert by[22]["tot"]["fow"] == 18 and abs(v(22, "fo_pct") - 75.0) < 1e-9 and v(23, "fo_pct") is None and v(23, "ixg60") is None
+    assert by[24]["tot"]["gsax"] == 1.0 and by[14]["tot"]["gsax"] == 2.0 and abs(v(24, "gsax60") - 0.5) < 1e-9
+    assert by[21]["tot"]["ppp"] == 2 and by[23]["tot"]["gwg"] == 2
+    scaled = players.compute(table, games, boxes, people, xg_scale=0.5)
+    assert {p["id"]: p for p in scaled["players"]}[21]["tot"]["ixg"] == 1.2
+    log = rated["logs"][21]
+    assert len(log) == 2 and log[0][:5] == [2026020090, "2026-10-10", "UTA", 1, "W 2-1"] and log[0][5:] == [1, 1, 0, 2, 1, 1, 0, 900, 1.2]
+    assert rated["logs"][14][0] == [2026020090, "2026-10-10", "BOS", 0, "L 1-2", 22, 20, 2, 3600, "L", 1.0]
 
 
 def test_team_stats_come_from_the_box_scores():
@@ -345,18 +413,21 @@ def test_team_stats_come_from_the_box_scores():
     assert bos["pp_pct"] == 25.0 and bos["pk_pct"] == 100.0 and uta["pp_pct"] == 0.0 and uta["pk_pct"] == 75.0
     assert bos["fo_pct"] == 46.4 and uta["fo_pct"] == 53.6 and bos["sv_pct"] == round(1 - 1 / 37, 3)
     assert (bos["power"], uta["power"]) == (1, 2) and bos["hits_gp"] == 23.0
+    assert (bos["xgf_gp"], bos["xga_gp"], bos["xg_pct"], uta["xg_pct"]) == (3.0, 1.5, 66.7, 33.3) and bos["g_pct"] == 66.7
     shootout = [{**games[0], "end": "SO"}]
     assert teams.compute(table, shootout, boxes, {})["teams"][0]["gf_gp"] == 1.0      # the shootout winner's extra goal is not a goal scored
 
 
 # ----------------------------------------------------------------- the job --
 def test_which_box_scores_are_fetched():
-    done = {"status": "F", "full": True}
+    done = {"status": "F", "full": True, "adv": {"v": xg.model()["version"]}}
     games = [played(1, "2026-10-01", "A", "B", 1, 2), played(2, "2026-10-01", "A", "B", 1, 2), played(3, "2026-10-08", "A", "B", 1, 2),
              {**played(4, "2026-10-09", "A", "B", None, None), "state": "upcoming"}, played(5, "2026-10-01", "A", "B", 1, 2)]
-    stored = {"1": done, "3": done, "5": {"status": "F", "full": False}}
+    stored = {"1": done, "3": done, "5": {**done, "full": False}}
     want = run.boxes_wanted(games, stored, dt.date(2026, 10, 9))
     assert [g["id"] for g in want] == [2, 3, 5]       # not stored; recent, so read again for corrections; stored without its summary
+    stored["5"] = {"status": "F", "full": True}        # stored before the play-by-play was read
+    assert [g["id"] for g in run.boxes_wanted(games, stored, dt.date(2026, 10, 9))] == [2, 3, 5]
 
 
 def test_game_night_runs_only_work_when_a_game_is_on():
@@ -373,13 +444,13 @@ def test_game_night_runs_only_work_when_a_game_is_on():
         games["1"].update(state="final")
         run.write_json(state / "schedule.json", {"season": 2026, "games": games})
         assert ids("2026-10-10T01:30") == [1]                       # over, but its box score is not in yet
-        run.write_json(state / "box.json", {"1": {"status": "F", "full": True}})
+        run.write_json(state / "box.json", {"1": {"status": "F", "full": True, "adv": {"v": xg.model()["version"]}}})
         assert ids("2026-10-10T01:30") == []
 
 
 def test_the_wording_file_is_complete():
     words = run.read_words()
-    assert words["nav.games"] == "Games" and "{goat}" in words["standings.note_goat_how"]
+    assert words["nav.games"] == "Games" and "{from}" in words["standings.note_goat_how"]
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp)
         for name in ("app.js", "index.html", "words.txt"):
@@ -391,6 +462,10 @@ def test_the_wording_file_is_complete():
             raise AssertionError("a broken line was accepted")
         except RuntimeError as e:
             assert "nav.games" in str(e)
+
+
+def doc_xg(out):
+    return json.loads((out / "game" / "2026020056.json").read_text())["xg"]
 
 
 def test_the_site_is_built_from_what_is_stored():
@@ -408,6 +483,10 @@ def test_the_site_is_built_from_what_is_stored():
         assert data["site"] == config.SITE_NAME and data["season"] == 2026 and [t["id"] for t in data["teams"]] == ["BOS", "UTA"]
         bos = data["teams"][0]
         assert bos["goat"] == 1 and data["teams"][1]["goat"] == 2 and bos["sos_rank"] in (1, 2) and "beat" not in bos
+        assert bos["xg_pct"] == 66.7 and bos["g_pct"] == 66.7 and bos["hot"] == 0 and 0 < data["xg"]["scale"] < 1.01
+        assert abs(data["xg"]["scale"] - (6 + config.XG_STEADY_GOALS) / (9 + config.XG_STEADY_GOALS)) < 1e-4
+        log = json.loads((out / "player" / "21.json").read_text())
+        assert len(log["games"]) == 2 and log["games"][0][0] == 2026020090 and doc_xg(out) == [1.5, 3.0]
         by = {g["id"]: g for g in data["games"]}
         assert by[2026020056]["box"] == 1 and 0 < by[2026020056]["p0"] < 1 and by[2026020056]["home"]["rank"] == 1
         # Utah, at home, has less of a chance than a home team level with its visitor

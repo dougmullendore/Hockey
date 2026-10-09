@@ -41,11 +41,18 @@ ODDS_MARGIN_CAP = 4       # a win by more than this many goals counts as this ma
 ODDS_TESTED = {"games": 5592, "favorite_won": 0.580, "home_won": 0.535, "seasons": "2022-23 to 2025-26",
                "given": "60 to 70%", "won": 0.65}
 
-# The GOAT ranking (pipeline/goat.py) of the 32 teams: head to head first,
-# then strength of schedule, the standings and record, in that order.
-GOAT_WEIGHTS = (0.5, 0.3, 0.2)   # strength of schedule, place in the standings, record
-GOAT_HEAD_TO_HEAD = 0.15  # a head-to-head lead outweighs a score gap up to this size (scores run 0 to 1)
-GOAT_REACH = 40           # how far up or down the order one move can take a team
+# The GOAT ranking (pipeline/goat.py) of the 32 teams: each team's place among
+# the 32 on these four things, weighted like this, plus a boost for a hot streak.
+GOAT_WEIGHTS = {"record": 0.30, "sos": 0.15, "xg": 0.30, "goals": 0.25}
+GOAT_HOT_FROM = 3         # a winning streak counts as hot from this many wins in a row
+GOAT_HOT_STEP = 0.02      # added to a hot team's total for each win in the streak
+GOAT_HOT_MAX = 0.10       # and never more than this (the totals run from 0 to 1)
+
+# Expected goals (pipeline/xg.py). The model tends to run a few percent high or
+# low in any one season, so its numbers are scaled to make the league's
+# expected goals equal the goals actually scored. Early in a season the scale
+# stays close to 1: it acts as if this many goals had already matched exactly.
+XG_STEADY_GOALS = 1500
 
 # Where to watch: the channels the league lists for each game. Networks in
 # these countries are shown, national ones first.
