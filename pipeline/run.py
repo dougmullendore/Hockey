@@ -13,6 +13,7 @@ Usage:  python -m pipeline.run <state_dir> <site_output_dir>
   standings.json   the league table as of the last look
   box.json         the box score of every game played this season
   people.json      players' details, from the teams' rosters
+  careers.json     players' earlier NHL seasons, from each player's own page
   ratings.json     every team's rating, this season and last (behind the odds)
   status.json      what happened on the last run
 """
@@ -28,7 +29,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import config, goat, nhl, odds, players, teams, web, xg
+from . import careers, config, goat, nhl, odds, players, teams, web, xg
 
 SITE_SRC = Path(__file__).resolve().parents[1] / "site"
 
@@ -189,6 +190,34 @@ def update_people(state: Path, now: dt.datetime) -> dict:
     log(f"people: {res['rosters_read']} rosters read, {res['looked_up']} players looked up one by one; "
         f"details for {len(played & set(people))} of the {len(played)} who have played")
     return res
+
+
+def update_careers(state: Path, now: dt.datetime) -> dict:
+    """Earlier seasons, career playoff totals and draft details of everyone
+    who has played this season, from each player's own page in the feed."""
+    stored = read_json(state / "careers.json", {})
+    boxes = read_json(state / "box.json", {})
+    played = sorted({str(row[0]) for b in boxes.values() for side in ("away", "home") for kind in ("sk", "g")
+                     for row in (b.get(side) or {}).get(kind) or []})
+    today = now.date()
+
+    def stale(pid):
+        have = stored.get(pid)
+        return not have or (today - dt.date.fromisoformat(have["at"])).days >= config.CAREER_REFRESH_DAYS
+
+    todo = [pid for pid in played if stale(pid)][:config.CAREER_MAX_PER_RUN]
+    failed = 0
+    for path, doc, err in web.get_many([f"player/{pid}/landing" for pid in todo], tries=2):
+        if err is not None:
+            failed += 1
+            continue
+        stored[path.split("/")[1]] = {"at": today.isoformat(), **careers.parse(doc)}
+    write_json(state / "careers.json", stored)
+    have = sum(1 for pid in played if pid in stored)
+    log(f"careers: {len(todo) - failed} of {len(todo)} players read; earlier seasons for {have} of the {len(played)} who have played")
+    if todo and failed == len(todo):
+        raise RuntimeError("no player's career could be read")
+    return {"asked": len(todo), "failed": failed, "have": have, "played": len(played)}
 
 
 def live_now(state: Path, now: dt.datetime) -> list[dict]:
@@ -364,10 +393,14 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         people = {k: {x: y for x, y in v.items() if x != "photo"} for k, v in people.items()}
     rated = players.compute(table, counted, boxes, people, xg_scale)
     rated["through"] = max((g["date"] for g in counted if g["state"] == "final"), default=None)
-    # One small file per player with his game-by-game lines, for his card.
+    # One small file per player for his card: his game-by-game lines and his career.
     (out / "player").mkdir(exist_ok=True)
-    for pid, lines in rated.pop("logs").items():
-        write_json(out / "player" / f"{pid}.json", {"id": pid, "games": lines})
+    past = read_json(state / "careers.json", {})
+    logs = rated.pop("logs")
+    for p in rated["players"]:
+        write_json(out / "player" / f"{p['id']}.json", {
+            "id": p["id"], "games": logs.get(p["id"]) or [],
+            "career": careers.build(past.get(str(p["id"])), p, names[p["team_id"]]["short"], season)})
     with_box = game_files(out, games, boxes, people)
     write_json(out / "data.json", {
         "site": config.SITE_NAME, "league": config.LEAGUE, "updated": now.isoformat(timespec="seconds"), "season": season,
@@ -424,6 +457,7 @@ def main(state_dir: str, out_dir: str) -> int:
         stage("standings", lambda: update_standings(state, now))
         stage("box scores", lambda: update_boxes(state, now))
         stage("people", lambda: update_people(state, now))
+        stage("careers", lambda: update_careers(state, now))
     stage("site", lambda: build_site(state, out, now))
     status["finished_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     status["ok"] = all(s["ok"] for s in status["stages"].values())

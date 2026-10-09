@@ -422,3 +422,8 @@ a.tlink:hover { color: var(--teal); text-decoration: underline; }
 .pcard > .pc-sec { grid-column: 1 / -1; }
 .pc-cols .pc-sec { break-inside: avoid; }
 @media (min-width: 900px) { .pc-cols { columns: 2; column-gap: 40px; } .pc-cols .pc-sec { margin-top: 0; padding-top: 22px; } }
+.cartable tbody th, .cartable tfoot th { font-weight: 600; white-space: nowrap; padding: 6px 10px; border-top: 1px solid var(--line); text-align: left; }
+.cartable tfoot th { border-top: 2px solid var(--ink); }
+.cartable tbody tr.now td, .cartable tbody tr.now th { background: color-mix(in srgb, var(--teal-soft) 45%, var(--sheet)); }
+.cartable tfoot tr.po td, .cartable tfoot tr.po th { border-top: 1px solid var(--line); font-weight: 400; color: var(--ink-2); }
+.cartable td.l { color: var(--ink-2); }

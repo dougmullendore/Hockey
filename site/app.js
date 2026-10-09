@@ -512,7 +512,7 @@
     return bits.length ? el("p", { "class": "pc-bio", text: bits.join(" · ") }) : null;
   }
 
-  // His game-by-game lines, newest first, from player/<id>.json.
+  // His game-by-game lines, newest first, from player/<id>.json (which also holds his career).
   // a skater's line: [game, date, opponent, at home, result, g, a, +/-, sog, hits, blk, pim, toi, xg]
   // a goalie's:      [game, date, opponent, at home, result, sa, sv, ga, toi, decision, goals saved above expected]
   var LOG_SK = [["G", "Goals", function (r) { return r[5]; }], ["A", "Assists", function (r) { return r[6]; }], ["PTS", "Points", function (r) { return r[5] + r[6]; }],
@@ -523,10 +523,16 @@
     ["SV", "Saves", function (r) { return r[6]; }], ["GA", "Goals against", function (r) { return r[7]; }],
     ["Sv%", "Save percentage", function (r) { return r[5] ? (r[6] / r[5]).toFixed(3).replace(/^0/, "") : ""; }], ["TOI", "Time on ice", function (r) { return mmss(r[8]); }],
     ["GSAx", "Goals saved above expected", function (r) { return r[10] == null ? "" : fmt.s2(r[10]); }]];
+  var playerFiles = {};
+  function loadPlayerFile(id) {
+    if (!playerFiles[id]) playerFiles[id] = fetch("player/" + id + ".json", { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+    playerFiles[id].catch(function () { delete playerFiles[id]; });
+    return playerFiles[id];
+  }
   function gameLog(box, p) {
     var cols = p.grp === "G" ? LOG_G : LOG_SK, all = false;
     box.appendChild(el("p", { "class": "empty", text: "Loading…" }));
-    fetch("player/" + p.id + ".json", { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
+    loadPlayerFile(p.id).then(function (d) {
       function table() {
         while (box.childNodes.length > 1) box.removeChild(box.lastChild);
         var rows = all ? d.games : d.games.slice(0, 10);
@@ -548,6 +554,48 @@
     }).catch(function () {
       while (box.childNodes.length > 1) box.removeChild(box.lastChild);
       box.appendChild(el("p", { "class": "empty", text: "His game-by-game lines could not be loaded." }));
+    });
+  }
+  // His NHL career, season by season, from player/<id>.json.
+  // a skater's season: [season, team, gp, g, a, pts, +/-, pim, ppg, ppp, gwg, sog, seconds a game]
+  // a goalie's:        [season, team, gp, gs, w, l, otl, sa, ga, so, seconds in all]
+  var CAR_SK = [["GP", "Games played", function (r) { return r[2]; }], ["G", "Goals", function (r) { return r[3]; }], ["A", "Assists", function (r) { return r[4]; }],
+    ["PTS", "Points", function (r) { return r[5]; }, "strong"], ["+/−", "Plus-minus", function (r) { return fmt.pm(r[6]); }], ["PIM", "Penalty minutes", function (r) { return r[7]; }],
+    ["PPG", "Power-play goals", function (r) { return r[8]; }], ["PPP", "Power-play points", function (r) { return r[9]; }], ["GWG", "Game-winning goals", function (r) { return r[10]; }],
+    ["SOG", "Shots on goal", function (r) { return r[11]; }], ["S%", "Shooting percentage", function (r) { return r[11] ? (100 * r[3] / r[11]).toFixed(1) : ""; }],
+    ["TOI", "Ice time a game", function (r) { return r[12] ? mmss(r[12]) : ""; }]];
+  var CAR_G = [["GP", "Games played", function (r) { return r[2]; }], ["GS", "Games started", function (r) { return r[3]; }], ["W", "Wins", function (r) { return r[4]; }, "strong"],
+    ["L", "Losses", function (r) { return r[5]; }], ["OT", "Overtime and shootout losses", function (r) { return r[6]; }], ["SA", "Shots against", function (r) { return r[7]; }],
+    ["GA", "Goals against", function (r) { return r[8]; }], ["Sv%", "Save percentage", function (r) { return r[7] ? (1 - r[8] / r[7]).toFixed(3).replace(/^0/, "") : ""; }],
+    ["GAA", "Goals against per 60 minutes", function (r) { return r[10] ? (r[8] * 3600 / r[10]).toFixed(2) : ""; }], ["SO", "Shutouts", function (r) { return r[9]; }]];
+  function seasonName(y) { return y + "-" + ("0" + ((y + 1) % 100)).slice(-2); }
+  function careerTable(box, p) {
+    var cols = p.grp === "G" ? CAR_G : CAR_SK;
+    box.appendChild(el("p", { "class": "empty", text: "Loading…" }));
+    loadPlayerFile(p.id).then(function (d) {
+      var c = d.career;
+      box.removeChild(box.lastChild);
+      if (!c || !c.seasons.length) { box.appendChild(el("p", { "class": "empty", text: "No career numbers yet." })); return; }
+      function line(label, team, r, cls) {
+        return el("tr", { "class": cls || "" }, [el("th", { scope: "row", "class": "l", text: label }), el("td", { "class": "l", text: team })]
+          .concat(cols.map(function (k) { return el("td", { "class": k[3] || "", text: String(k[2](r)) }); })));
+      }
+      var head = el("tr", {}, [el("th", { scope: "col", "class": "l", text: "Season" }), el("th", { scope: "col", "class": "l", text: "Team" })]
+        .concat(cols.map(function (k) { return el("th", { scope: "col", title: k[1], text: k[0] }); })));
+      var body = el("tbody", {}, c.seasons.map(function (r, i) { return line(seasonName(r[0]), r[1], r, i === c.seasons.length - 1 ? "now" : ""); }));
+      var years = {};
+      c.seasons.forEach(function (r) { years[r[0]] = 1; });
+      var n = Object.keys(years).length;
+      var foot = el("tfoot", {}, [line("Career", n + (n === 1 ? " season" : " seasons"), c.total)]
+        .concat(c.playoffs ? [line("Playoffs", "career", ["", ""].concat(c.playoffs), "po")] : []));
+      box.appendChild(el("div", { "class": "tablewrap", tabindex: "0", role: "region", "aria-label": p.name + " career, scrolls sideways" }, [
+        el("table", { "class": "ptable btable cartable" }, [el("thead", {}, [head]), body, foot])]));
+      var notes = ["NHL regular seasons. This season's line is counted by this site from the box scores" + (c.known ? "; earlier seasons and the playoff line are the league's own." : "; his earlier seasons have not been read yet.")];
+      if (c.draft) notes.push(" Drafted in " + c.draft[0] + (c.draft[1] ? ", round " + c.draft[1] : "") + (c.draft[2] ? ", " + ordinal(c.draft[2]) + " overall" : "") + (c.draft[3] ? ", by " + ((T(c.draft[3]) || {}).name || c.draft[3]) : "") + ".");
+      box.appendChild(el("p", { "class": "note", text: notes.join("") }));
+    }).catch(function () {
+      box.removeChild(box.lastChild);
+      box.appendChild(el("p", { "class": "empty", text: "His career numbers could not be loaded." }));
     });
   }
 
@@ -606,6 +654,9 @@
           ["Penalties drawn", tot.pd], ["Minutes", Math.round(tot.toi / 60)]];
       art.appendChild(el("section", { "class": "pc-sec" }, [el("h2", { text: "Season totals" }),
         el("dl", { "class": "totals" }, totals.map(function (x) { return el("div", {}, [el("dt", { text: x[0] }), el("dd", { text: String(x[1]) })]); }))]));
+      var careerBox = el("section", { "class": "pc-sec pc-log" }, [el("h2", { text: "Career" })]);
+      art.appendChild(careerBox);
+      careerTable(careerBox, p);
       var logBox = el("section", { "class": "pc-sec pc-log" }, [el("h2", { text: "Game by game" })]);
       art.appendChild(logBox);
       gameLog(logBox, p);

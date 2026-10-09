@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from pipeline import config, goat, nhl, odds, players, run, teams, xg
+from pipeline import careers, config, goat, nhl, odds, players, run, teams, xg
 
 FIX = Path(__file__).parent / "fixtures"
 UTC = dt.timezone.utc
@@ -404,6 +404,45 @@ def test_players_are_rated_against_their_position():
     assert rated["logs"][14][0] == [2026020090, "2026-10-10", "BOS", 0, "L 1-2", 22, 20, 2, 3600, "L", 1.0]
 
 
+def career_page():
+    """A player's own page in the feed, cut down to what is read: Connor McDavid's last seasons."""
+    def nhl_row(season, kind, gp, g, a, **more):
+        return {"season": season, "gameTypeId": kind, "leagueAbbrev": "NHL", "sequence": 1, "gamesPlayed": gp, "goals": g, "assists": a,
+                "points": g + a, "plusMinus": 17, "pim": 44, "powerPlayGoals": 13, "powerPlayPoints": 54, "gameWinningGoals": 4,
+                "shots": 306, "avgToi": "22:59", "teamCommonName": {"default": "Oilers"}, "teamName": {"default": "Edmonton Oilers"}, **more}
+    return {"position": "C", "draftDetails": {"year": 2015, "teamAbbrev": "EDM", "round": 1, "pickInRound": 1, "overallPick": 1},
+            "careerTotals": {"regularSeason": {"gamesPlayed": 798}, "playoffs": {"gamesPlayed": 102, "goals": 45, "assists": 111, "points": 156,
+                                                                                "plusMinus": 23, "pim": 30, "powerPlayGoals": 14, "powerPlayPoints": 58,
+                                                                                "gameWinningGoals": 5, "shots": 350, "avgToi": "23:38"}},
+            "seasonTotals": [{"season": 20142015, "gameTypeId": 2, "leagueAbbrev": "OHL", "gamesPlayed": 47, "goals": 44, "assists": 76, "points": 120,
+                              "teamName": {"default": "Erie Otters"}},
+                             nhl_row(20242025, 2, 67, 26, 74, avgToi="22:00"), nhl_row(20252026, 2, 82, 48, 90), nhl_row(20252026, 3, 6, 1, 5),
+                             nhl_row(20262027, 2, 4, 3, 9)]}
+
+
+def test_a_career_is_read_and_joined_to_this_season():
+    kept = careers.parse(career_page())
+    assert kept["g"] == 0 and [r[0] for r in kept["seasons"]] == [2024, 2025, 2026]          # NHL regular seasons only
+    assert kept["seasons"][1] == [2025, "Oilers", 82, 48, 90, 138, 17, 44, 13, 54, 4, 306, 1379]
+    assert kept["playoffs"] == [102, 45, 111, 156, 23, 30, 14, 58, 5, 350, 1418] and kept["draft"] == [2015, 1, 1, "EDM"]
+    card = {"grp": "F", "gp": 5, "tot": {"g": 4, "a": 9, "pts": 13, "pm": 11, "pim": 2, "ppg": 1, "ppp": 3, "gwg": 1, "sog": 10, "toi": 7000}}
+    c = careers.build(kept, card, "Oilers", 2026)
+    # this season's line is the site's own, not the feed's older copy of it
+    assert [r[0] for r in c["seasons"]] == [2024, 2025, 2026] and c["seasons"][2] == [2026, "Oilers", 5, 4, 9, 13, 11, 2, 1, 3, 1, 10, 1400]
+    assert c["total"][2:6] == [67 + 82 + 5, 26 + 48 + 4, 74 + 90 + 9, 100 + 138 + 13] and c["known"] and c["draft"][0] == 2015
+    assert c["total"][12] == round((1320 * 67 + 1379 * 82 + 1400 * 5) / 154) and c["playoffs"][0] == 102
+    rookie = careers.build(None, card, "Oilers", 2026)
+    assert rookie["seasons"] == [c["seasons"][2]] and rookie["total"][2:] == c["seasons"][2][2:] and not rookie["known"] and "draft" not in rookie
+    goalie_page = {"position": "G", "seasonTotals": [{"season": 20252026, "gameTypeId": 2, "leagueAbbrev": "NHL", "gamesPlayed": 60, "gamesStarted": 58,
+                                                     "wins": 35, "losses": 18, "otLosses": 5, "shotsAgainst": 1700, "goalsAgainst": 150, "shutouts": 4,
+                                                     "timeOnIce": "3480:30", "teamCommonName": {"default": "Stars"}}]}
+    g = careers.parse(goalie_page)
+    assert g["g"] == 1 and g["seasons"] == [[2025, "Stars", 60, 58, 35, 18, 5, 1700, 150, 4, 208830]] and "playoffs" not in g
+    mask = {"grp": "G", "gp": 3, "tot": {"gs": 3, "w": 2, "l": 1, "otl": 0, "sa": 61, "ga": 2, "so": 2, "toi": 10697}}
+    assert careers.build(g, mask, "Stars", 2026)["total"] == ["", "", 63, 61, 37, 19, 5, 1761, 152, 6, 219527]
+    assert careers.build(kept, mask, "Stars", 2026)["known"] is False             # a skater's kept seasons are not a goalie's
+
+
 def test_team_stats_come_from_the_box_scores():
     table, games, boxes = small_season()
     out = teams.compute(table, games, boxes, {"BOS": 0.2, "UTA": -0.1})
@@ -477,6 +516,7 @@ def test_the_site_is_built_from_what_is_stored():
         run.write_json(state / "standings.json", {"read": "2026-10-11T10:00:00+00:00", "teams": table})
         run.write_json(state / "box.json", boxes)
         run.write_json(state / "people.json", {"read": "2026-10-11", "players": {"21": {"first": "David", "last": "Pastrnak", "photo": "p.png"}}})
+        run.write_json(state / "careers.json", {"21": {"at": "2026-10-11", "g": 0, "seasons": [[2025, "Bruins", 82, 40, 50, 90, 5, 20, 10, 30, 6, 250, 1100]]}})
         res = run.build_site(state, out, dt.datetime(2026, 10, 11, 11, tzinfo=UTC))
         assert res["games"] == 3 and res["played"] == 2 and res["game_pages"] == 2 and res["with_odds"] == 1 and res["missing_box"] == []
         data = json.loads((out / "data.json").read_text())
@@ -487,6 +527,9 @@ def test_the_site_is_built_from_what_is_stored():
         assert abs(data["xg"]["scale"] - (6 + config.XG_STEADY_GOALS) / (9 + config.XG_STEADY_GOALS)) < 1e-4
         log = json.loads((out / "player" / "21.json").read_text())
         assert len(log["games"]) == 2 and log["games"][0][0] == 2026020090 and doc_xg(out) == [1.5, 3.0]
+        assert log["career"]["seasons"] == [[2025, "Bruins", 82, 40, 50, 90, 5, 20, 10, 30, 6, 250, 1100], [2026, "Bruins", 2, 2, 2, 4, 0, 0, 2, 2, 0, 4, 900]]
+        assert log["career"]["total"][2:6] == [84, 42, 52, 94] and log["career"]["known"]
+        assert json.loads((out / "player" / "11.json").read_text())["career"]["known"] is False
         by = {g["id"]: g for g in data["games"]}
         assert by[2026020056]["box"] == 1 and 0 < by[2026020056]["p0"] < 1 and by[2026020056]["home"]["rank"] == 1
         # Utah, at home, has less of a chance than a home team level with its visitor

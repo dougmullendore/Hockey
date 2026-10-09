@@ -92,7 +92,13 @@ and goalies on their own, and each name opens a card.
   his faceoff percentage; a goalie's goals saved above expected, which does
   account for where the shots came from. Season totals include power-play and
   shorthanded points, game-winning goals, shot attempts, expected goals and
-  faceoffs, and at the bottom is every game he has played, newest first.
+  faceoffs. Below them is his **career**: every NHL regular season he has
+  played, a career line and his career playoff totals, with where he was
+  drafted; and then every game he has played this season, newest first.
+- Earlier seasons come from the player's own page in the league's feed, read
+  once and kept in `careers.json` (and read again every 30 days). This
+  season's line is the site's own count from the box scores, so the career
+  line is always up to date with the rest of the card.
 
 What it cannot do: it sees only the box score, so it knows nothing about shot
 quality, who else was on the ice, or how strong the opponent was. Early in
@@ -242,6 +248,7 @@ leaves the old site up; GitHub emails you, and the run log names the line.
 | `pipeline/config.py` | Every setting: season dates, odds settings, GOAT weights, what to show |
 | `pipeline/nhl.py` | Reads the league's feed: schedule, standings, box scores, rosters |
 | `pipeline/players.py` | Rates the players against each other and works out percentiles |
+| `pipeline/careers.py` | Each player's earlier seasons, joined to this one for his career table |
 | `pipeline/teams.py` | Adds up each team's stats from the box scores |
 | `pipeline/goat.py` | The GOAT ranking: record, schedule, expected-goal share, goal share and a hot-streak boost |
 | `pipeline/xg.py` | Expected goals: reads the play-by-play and gives each shot its chance of scoring |
@@ -259,7 +266,7 @@ Two side branches of this repository hold what the job produces:
 
 - `state`: the season's games (`schedule.json`), the standings
   (`standings.json`), the box scores with what was taken from each game's
-  play-by-play (`box.json`), players' details
+  play-by-play (`box.json`), players' earlier seasons (`careers.json`), players' details
   (`people.json`), the ratings (`ratings.json`), and what happened on the
   last run (`status.json`, `logs/last_run.log`).
 - `gh-pages`: the finished page.

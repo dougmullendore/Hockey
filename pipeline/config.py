@@ -23,6 +23,11 @@ BOX_REFRESH_DAYS = 2
 # Rosters (names, photos, height, weight, birthplace) are read again after this many days.
 ROSTER_REFRESH_DAYS = 1
 
+# Each player's earlier seasons are read from his own page in the feed and kept;
+# they are read again after this many days (for a new season, or the playoffs).
+CAREER_REFRESH_DAYS = 30
+CAREER_MAX_PER_RUN = 1200
+
 # Team logos and player photos are not stored here: the page shows them
 # straight from the NHL's own site. Set either to "" to show none.
 LOGO_URL = "https://assets.nhle.com/logos/nhl/svg/{team}_light.svg"
