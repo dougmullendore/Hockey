@@ -1064,21 +1064,66 @@
     });
   }
 
+  // ---- the awards race: the leaders for each trophy ----
+  var awardData = null, awardOpen = {};
+  function drawAwards() {
+    var box = $("awards");
+    box.innerHTML = "";
+    box.appendChild(el("p", { "class": "empty", text: "Loading the races…" }));
+    (awardData ? Promise.resolve(awardData) : fetch("awards.json", { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { awardData = d; return d; })).then(function (d) {
+      box.innerHTML = "";
+      var grid = el("div", { "class": "agrid" });
+      d.races.forEach(function (race) {
+        var all = !!awardOpen[race.key], rows = all ? race.rows : race.rows.slice(0, 5);
+        var card = el("section", { "class": "acard" }, [el("h2", { text: race.trophy }), el("p", { "class": "afor", text: race["for"] + (race.counted ? "" : " · " + W("awards.scored")) })]);
+        if (!race.rows.length) card.appendChild(el("p", { "class": "empty", text: W("awards.none") }));
+        card.appendChild(el("ol", { "class": "arows" }, rows.map(function (r, i) {
+          var t = T(r.team), isTeam = r.id == null;
+          var move = r.was == null ? null : r.was === 0 ? el("span", { "class": "amove up", title: "Not in the top ten a week ago", text: "new" })
+            : r.was > i + 1 ? el("span", { "class": "amove up", title: "Up from " + ordinal(r.was) + " a week ago", text: "▲" + (r.was - i - 1) })
+            : r.was < i + 1 ? el("span", { "class": "amove down", title: "Down from " + ordinal(r.was) + " a week ago", text: "▼" + (i + 1 - r.was) }) : null;
+          return el("li", { "class": i === 0 ? "lead" : "" }, [
+            el("span", { "class": "rk", text: String(i + 1) }),
+            isTeam ? logo(r.team, i === 0 ? "gc" : "") : face(r, i === 0 ? "md" : "sm2"),
+            el("span", { "class": "awho" }, [
+              el("a", { "class": "aname", href: isTeam ? "#/team/" + r.team : "#/player/" + r.id, text: r.name }),
+              el("span", { "class": "ateam" }, isTeam ? (r.sub ? [r.sub] : []) : [logo(r.team, "sm", t ? t.name : r.team), (t ? t.short : r.team) + " · " + (POS_ONE[r.pos] || r.pos)]),
+              el("span", { "class": "astats", text: r.stats.join(" · ") })]),
+            el("span", { "class": "ascore" }, [r.score != null ? el("b", { title: W("awards.score_title"), text: r.score.toFixed(0) }) : null, move])]);
+        })));
+        if (race.rows.length > 5) card.appendChild(el("p", { "class": "more" }, [el("button", { type: "button", "class": "morebtn", text: all ? "Show the top 5" : "Show the top " + race.rows.length,
+          onclick: function () { awardOpen[race.key] = !all; drawAwards(); } })]));
+        if (race.recipe) {
+          var names = { impact: "Impact added", team: "team's record", points: "points", ice: "ice time a game", saved: "goals saved above expected", save_pct: "save percentage", wins: "wins",
+            plus_minus: "plus-minus", defense: "blocks and takeaways", faceoffs: "faceoffs won", kill: "penalty-kill time", clean: "few penalty minutes" };
+          card.appendChild(el("p", { "class": "arecipe", text: "Score: " + Object.keys(race.recipe).map(function (k) { return Math.round(100 * race.recipe[k]) + "% " + (names[k] || k); }).join(", ") + "." }));
+        } else if (race.key === "adams") card.appendChild(el("p", { "class": "arecipe", text: W("awards.adams_note") }));
+        grid.appendChild(card);
+      });
+      box.appendChild(grid);
+      box.appendChild(el("p", { "class": "note", text: (d.through ? "Regular season, through games of " + short(d.through) + ". " : "") + W("awards.note") }));
+    }).catch(function () {
+      box.innerHTML = "";
+      box.appendChild(el("p", { "class": "empty", text: "The races could not be loaded. Reload the page to try again." }));
+    });
+  }
+
   function route() {
     var h = location.hash, card = /^#\/?player\/(\d+)/.exec(h), game = /^#\/?game\/(\d+)/.exec(h), tm = /^#\/?team\/(.+)$/.exec(h), ln = /^#\/?lines(?:\/(.+))?$/.exec(h);
     stopGame();
-    var page = tm ? "team" : game ? "game" : card ? "card" : ln ? "lines" : /^#\/?players/.test(h) ? "players" : /^#\/?standings/.test(h) ? "standings" : /^#\/?teams/.test(h) ? "teams" : "games";
-    ["games", "standings", "teams", "players", "lines", "card", "game", "team"].forEach(function (p) { $("page-" + p).hidden = p !== page; });
+    var page = tm ? "team" : game ? "game" : card ? "card" : ln ? "lines" : /^#\/?awards/.test(h) ? "awards" : /^#\/?players/.test(h) ? "players" : /^#\/?standings/.test(h) ? "standings" : /^#\/?teams/.test(h) ? "teams" : "games";
+    ["games", "standings", "teams", "players", "lines", "awards", "card", "game", "team"].forEach(function (p) { $("page-" + p).hidden = p !== page; });
     Array.prototype.forEach.call(document.querySelectorAll(".pages a"), function (a) {
       if (a.dataset.page === (page === "card" ? "players" : page === "game" ? "games" : page === "team" ? "teams" : page)) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    document.title = ({ standings: W("standings.title"), teams: W("teams.title"), players: W("players.title"), lines: W("lines.title"), game: W("games.box_score"), team: "Team", card: "Player card" }[page] || W("games.title")) + " | " + data.site;
+    document.title = ({ standings: W("standings.title"), teams: W("teams.title"), players: W("players.title"), lines: W("lines.title"), awards: W("awards.title"), game: W("games.box_score"), team: "Team", card: "Player card" }[page] || W("games.title")) + " | " + data.site;
     if (page === "lines") {
       var remembered = null;
       try { remembered = localStorage.getItem("lines-team"); } catch (e) {}
       if (!ln[1] && remembered && T(remembered)) { location.replace("#/lines/" + remembered); return; }
       drawLines(ln[1] ? decodeURIComponent(ln[1]) : null);
-    } else if (page === "team") drawTeam(decodeURIComponent(tm[1])); else if (page === "game") drawGame(game[1]); else if (page === "standings") drawStandings(); else if (page === "teams") drawTeams(); else if (page === "players") drawPlayers(); else if (page === "card") drawCard(card[1]); else draw();
+    } else if (page === "awards") drawAwards(); else if (page === "team") drawTeam(decodeURIComponent(tm[1])); else if (page === "game") drawGame(game[1]); else if (page === "standings") drawStandings(); else if (page === "teams") drawTeams(); else if (page === "players") drawPlayers(); else if (page === "card") drawCard(card[1]); else draw();
     window.scrollTo(0, 0);
   }
 

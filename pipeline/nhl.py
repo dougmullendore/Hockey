@@ -289,6 +289,9 @@ def parse_box(box: dict, landing: dict | None, rail: dict | None, plays: dict | 
             t.setdefault(key, sum(r[key] for r in sk))
         out[side]["sk"] = [[r[c] for c in SK] for r in sk]
     out["tstats"] = team_stats
+    if rail is not None:               # each team's head coach, as listed for the game
+        info = rail.get("gameInfo") or {}
+        out["coach"] = {side: _text((info.get(side + "Team") or {}).get("headCoach")) for side in ("away", "home")}
     if plays is not None:
         out["adv"] = xg.summarize(plays)
     return out

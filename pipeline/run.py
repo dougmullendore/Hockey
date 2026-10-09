@@ -15,6 +15,7 @@ Usage:  python -m pipeline.run <state_dir> <site_output_dir>
   people.json      players' details, from the teams' rosters
   careers.json     players' earlier NHL seasons, from each player's own page
   lines.json       who was on the ice together in each game, from the shift charts
+  awards.json      each day's leaders in the awards races, to show who has moved
   ratings.json     every team's rating, this season and last (behind the odds)
   status.json      what happened on the last run
 """
@@ -30,7 +31,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import careers, config, goat, lines, nhl, odds, players, teams, web, xg
+from . import awards, careers, config, goat, lines, nhl, odds, players, teams, web, xg
 
 SITE_SRC = Path(__file__).resolve().parents[1] / "site"
 
@@ -110,7 +111,8 @@ def complete(have: dict | None) -> bool:
     """A stored game with everything in: the final box score, its summary, and
     the play-by-play read with the expected-goals model in use today."""
     have = have or {}
-    return have.get("status") == "F" and bool(have.get("full")) and (have.get("adv") or {}).get("v") == xg.model()["version"]
+    return (have.get("status") == "F" and bool(have.get("full")) and "coach" in have
+            and (have.get("adv") or {}).get("v") == xg.model()["version"])
 
 
 def boxes_wanted(games: list[dict], stored: dict, today: dt.date) -> list[dict]:
@@ -503,8 +505,33 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
         "odds_tested": config.ODDS_TESTED, "xg": {"scale": round(xg_scale, 4), "tested": xg.model().get("tested")}})
     write_json(out / "players.json", rated)
     write_json(out / "teams.json", teams.compute(table, counted, boxes, rating, xg_scale))
-    combos = team_lines(games, boxes, read_json(state / "lines.json", {}), people, table)
+    shift_counts = read_json(state / "lines.json", {})
+    combos = team_lines(games, boxes, shift_counts, people, table)
     write_json(out / "lines.json", {"teams": combos})
+
+    # The awards races (see pipeline/awards.py), with each leader's place a week ago.
+    kill, coaches, allowed = {}, {}, {t["id"]: [0, 0] for t in table}
+    for g in counted:
+        box = boxes.get(str(g["id"])) or {}
+        if g["state"] != "final" or box.get("status") != "F":
+            continue
+        for side, other in (("away", "home"), ("home", "away")):
+            team = g[side]["id"]
+            for pid, secs in ((shift_counts.get(str(g["id"])) or {}).get(team) or {}).get("pkt", {}).items():
+                kill[pid] = kill.get(pid, 0) + secs
+            if (box.get("coach") or {}).get(side):
+                coaches[team] = box["coach"][side]              # games are in order, so the latest one stands
+            if team in allowed:
+                theirs, mine = g[other]["score"], g[side]["score"]
+                allowed[team][0] += theirs - (1 if g.get("end") == "SO" and theirs > mine else 0)
+                allowed[team][1] += 1
+    races = awards.compute(rated, table, past, people, kill, coaches, {t: config.ODDS_KEEP * v for t, v in start.items()}, allowed, season)
+    seen = read_json(state / "awards.json", {})
+    today = now.date().isoformat()
+    awards.movement(races, seen, today)
+    seen[today] = awards.snapshot(races)
+    write_json(state / "awards.json", {d: v for d, v in sorted(seen.items())[-60:]})
+    write_json(out / "awards.json", {"races": races, "through": rated["through"]})
     (out / ".nojekyll").write_text("")
     done = sum(1 for g in games if g["state"] == "final")
     log(f"site: {len(games):,} games ({done:,} played, {with_box:,} with a box score), {len(table)} teams, "

@@ -14,6 +14,7 @@ nav.standings = Standings
 nav.teams = Teams
 nav.players = Players
 nav.lines = Lines
+nav.awards = Awards
 
 # ---- Games page ----
 games.title = NHL Games
@@ -79,6 +80,15 @@ lines.penalty_kill = Penalty Kill
 lines.goalies = Goalies
 lines.none = No lines yet: this team has not played a game with a shift chart this season.
 lines.note = These are worked out from the league's shift charts, not announced by the team: the three forwards (and two defensemen) who spent the most five-on-five time together in the last game are a line, then the next among the rest. Lines are numbered by ice time together. Power-play and penalty-kill units are the groups out together most over the last {n} games. A line broken up during the game, an injury or a benching shows as it happened. Left and right sides go by each player's listed position and shooting hand, so a center playing wing may be shown in the middle. Choose a player for his card.
+
+# ---- Awards page ----
+awards.title = NHL Awards Race
+awards.lede = Who would win each of the league's trophies if the season ended today, by this site's numbers.
+awards.scored = this site's score
+awards.score_title = This site's score out of 100: see the line under the list for what goes into it
+awards.none = Nobody yet: this race needs a few more games.
+awards.adams_note = Coaches are ranked by how far their team's share of the possible points is ahead of what its rating before the season pointed to.
+awards.note = The Art Ross, Rocket Richard, Jennings and Presidents' Trophy are counts, shown as they stand. The others are voted on at the end of the season, so each list is this site's reading of the numbers, not a forecast of the vote: every eligible player is placed among the others on each ingredient named under the list, and the places are mixed into a score out of 100. Only regulars are listed (40% of their team's games; goalies 20%). An arrow shows how far a name has moved in the last week. Early in the season a game or two can reorder a race.
 
 # ---- a game's own page ----
 game.back = All Games
