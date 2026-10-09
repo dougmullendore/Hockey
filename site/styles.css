@@ -480,3 +480,13 @@ a.tlink:hover { color: var(--teal); text-decoration: underline; }
   .pages { flex: 1 1 100%; justify-content: space-between; margin: 0 -6px; }
   .pages a { font-size: clamp(.75rem, 3.4vw, .9375rem); padding: 9px 6px; }
 }
+
+/* ---- stats by line and pair ---- */
+.llabel small.lon { color: var(--ink); font-variant-numeric: tabular-nums; }
+.ltable td, .ltable th button { text-align: center; }
+.ltable .lnames { white-space: nowrap; font-weight: 600; }
+.ltable .lnames a { color: var(--ink); text-decoration: none; }
+.ltable .lnames a:hover { color: var(--teal); text-decoration: underline; }
+.ltable td.good { color: var(--win); font-weight: 600; }
+.ltable td.poor { color: var(--loss); font-weight: 600; }
+.ltable thead th.l { padding: 10px; text-align: left; }

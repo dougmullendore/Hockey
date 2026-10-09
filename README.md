@@ -47,6 +47,17 @@ shift charts, which list every shift of every game (`pipeline/lines.py`).
 - It shows what the coach did, not what he plans: a line broken up during
   the game, an injury or a benching shows as it happened. Left and right
   sides go by each player's listed position and shooting hand.
+- **Stats by line and pair:** under each current line and pair are its goals
+  for and against and its share of the expected goals this season. Further
+  down, a sortable table lists every forward line and defense pair with at
+  least 10 minutes together at five-on-five this season (the 15 with the
+  most): games, ice time, goals for and against, expected goals for and
+  against, expected-goal share, shot-attempt share, and expected goals for
+  and against per 60 minutes. These come from laying each game's
+  play-by-play over its shift chart: a shot counts for the five skaters on
+  the ice in the second before it, and only when both teams have five
+  skaters out. A few minutes together say little; the numbers settle down
+  over a season.
 - There is no injury list: the league's feed does not carry one.
 - A game's shift chart sometimes arrives late or not at all; until it does,
   the page shows the lines from the game before.

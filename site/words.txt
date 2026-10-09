@@ -80,6 +80,12 @@ lines.penalty_kill = Penalty Kill
 lines.goalies = Goalies
 lines.none = No lines yet: this team has not played a game with a shift chart this season.
 lines.note = These are worked out from the league's shift charts, not announced by the team: the three forwards (and two defensemen) who spent the most five-on-five time together in the last game are a line, then the next among the rest. Lines are numbered by ice time together. Power-play and penalty-kill units are the groups out together most over the last {n} games. A line broken up during the game, an injury or a benching shows as it happened. Left and right sides go by each player's listed position and shooting hand, so a center playing wing may be shown in the middle. Choose a player for his card.
+lines.on_title = This season at five-on-five with this group out: goals for and against, and their share of the expected goals
+lines.stats_title = Line and Pair Stats
+lines.stats_lede = What has happened this season at five-on-five while each line and pair was on the ice.
+lines.stats_forwards = Forward lines
+lines.stats_pairs = Defense pairs
+lines.stats_note = Every line and pair with at least 10 minutes together at five-on-five this season, the 15 with the most. GF and GA are goals for and against while they were out; xGF and xGA are expected goals, what the shots were worth; xG% is their share of those, so over 50% means they had the better of the chances. Shots% is their share of all shot attempts, blocked ones included. A shot counts for the five skaters on the ice in the second before it. A few minutes together say little: these settle down over a season. Select a column heading to sort by it.
 
 # ---- a game's own page ----
 game.back = All Games

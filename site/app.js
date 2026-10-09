@@ -1112,13 +1112,20 @@
         if (heads) sec.appendChild(el("div", { "class": "lrow lhead", "aria-hidden": "true", style: "--n:" + heads.length }, [el("span", { "class": "llabel" })].concat(heads.map(function (h) { return el("span", { text: h }); }))));
         rows.forEach(function (r, i) {
           sec.appendChild(el("div", { "class": "lrow", style: "--n:" + (heads ? heads.length : r.ids.length) }, [
-            el("span", { "class": "llabel" }, [el("b", { text: labelOf(i) }), noteOf && noteOf(r) ? el("small", { text: noteOf(r) }) : null])]
+            el("span", { "class": "llabel" }, [el("b", { text: labelOf(i) }), noteOf && noteOf(r) ? el("small", { text: noteOf(r) }) : null,
+              cls !== "unit" && onNote(r) ? el("small", { "class": "lon", title: W("lines.on_title"), text: onNote(r) }) : null])]
             .concat(r.ids.map(function (pid) { return tile(pid); }))));
         });
         body.appendChild(sec);
       }
       function fiveNote(r) {
         return r.toi ? together(r.toi) + " together" + (r.games > 1 ? " · " + together(r.season) + " in " + r.games + " games" : "") : "";
+      }
+      // what happened with the line out this season: goals for and against, and its share of the expected goals
+      function onNote(r) {
+        var o = r.on;
+        if (!o || !(o[0] + o[1])) return "";
+        return "Goals " + o[4] + "–" + o[5] + (o[2] + o[3] > 0 ? " · xG " + Math.round(100 * o[2] / (o[2] + o[3])) + "%" : "");
       }
       section(W("lines.forwards"), ["LW", "C", "RW"], L.f, function (i) { return "Line " + (i + 1); }, fiveNote, "fwd");
       section(W("lines.defense"), ["LD", "RD"], L.d, function (i) { return "Pair " + (i + 1); }, fiveNote, "def");
@@ -1132,6 +1139,57 @@
         body.appendChild(sec);
       }
       body.appendChild(el("p", { "class": "note", text: W("lines.note", { n: L.special_games }) }));
+      // every line and pair with enough time together this season, with what happened while it was out
+      var all = L.all || { f: [], d: [] };
+      function lastName(pid) { var p = L.players[String(pid)]; return p ? p.name.split(" ").slice(1).join(" ") || p.name : "Unknown"; }
+      function share(a, b) { return a + b > 0 ? 100 * a / (a + b) : null; }
+      function per60(v, r) { return r.season ? v * 3600 / r.season : null; }
+      var COLS = [
+        ["gp", "GP", "Games in which they were out together", function (r) { return r.games; }, fmt.n],
+        ["toi", "TOI", "Five-on-five ice time together this season", function (r) { return r.season; }, together],
+        ["gf", "GF", "Goals for with them out", function (r) { return r.on[4]; }, fmt.n],
+        ["ga", "GA", "Goals against with them out", function (r) { return r.on[5]; }, fmt.n],
+        ["xgf", "xGF", "Expected goals for with them out", function (r) { return r.on[2]; }, fmt.d1],
+        ["xga", "xGA", "Expected goals against with them out", function (r) { return r.on[3]; }, fmt.d1],
+        ["xgp", "xG%", "Their share of the expected goals while out: over 50% means the better of the chances", function (r) { return share(r.on[2], r.on[3]); }, fmt.pct],
+        ["cfp", "Shots%", "Their share of the shot attempts while out (shots on goal, misses and blocked shots)", function (r) { return share(r.on[0], r.on[1]); }, fmt.pct],
+        ["xgf60", "xGF/60", "Expected goals for per 60 minutes", function (r) { return per60(r.on[2], r); }, fmt.d2],
+        ["xga60", "xGA/60", "Expected goals against per 60 minutes: lower is better", function (r) { return per60(r.on[3], r); }, fmt.d2]];
+      function statTable(rows, label, st) {
+        var holder = el("div", {});
+        function draw() {
+          holder.innerHTML = "";
+          var col = COLS.filter(function (c) { return c[0] === st.sort; })[0];
+          var sorted = rows.slice().sort(function (a, b) {
+            var x = col[3](a), y = col[3](b);
+            return (x == null) - (y == null) || st.dir * ((x || 0) - (y || 0)) || b.season - a.season;
+          });
+          var thead = el("thead", {}, [el("tr", {}, [el("th", { scope: "col", "class": "l", text: label })].concat(COLS.map(function (c) {
+            var on = st.sort === c[0];
+            return el("th", { scope: "col", "aria-sort": on ? (st.dir < 0 ? "descending" : "ascending") : null }, [
+              el("button", { type: "button", title: c[2], text: c[1] + (on ? (st.dir < 0 ? " ▼" : " ▲") : ""),
+                onclick: function () { if (on) st.dir = -st.dir; else { st.sort = c[0]; st.dir = -1; } draw(); } })]);
+          })))]);
+          var tbody = el("tbody", {}, sorted.map(function (r) {
+            var names = [];
+            r.ids.forEach(function (pid, i) { if (i) names.push(" – "); names.push(el("a", { href: "#/player/" + pid, text: lastName(pid) })); });
+            return el("tr", {}, [el("td", { "class": "l lnames" }, names)].concat(COLS.map(function (c) {
+              var v = c[3](r);
+              return el("td", { "class": (st.sort === c[0] ? "sorted" : "") + (c[0] === "xgp" && v != null ? (v >= 50 ? " good" : " poor") : ""), text: v == null ? "–" : c[4](v) });
+            })));
+          }));
+          holder.appendChild(el("div", { "class": "tablewrap", tabindex: "0", role: "region", "aria-label": label + " this season, scrolls sideways" }, [el("table", { "class": "ptable ltable" }, [thead, tbody])]));
+        }
+        draw();
+        return holder;
+      }
+      if (all.f.length || all.d.length) {
+        var stats = el("section", { "class": "tsec" }, [el("h2", { text: W("lines.stats_title") }), el("p", { "class": "tsub", text: W("lines.stats_lede") })]);
+        if (all.f.length) { stats.appendChild(el("h3", { "class": "day", text: W("lines.stats_forwards") })); stats.appendChild(statTable(all.f, "Line", { sort: "toi", dir: -1 })); }
+        if (all.d.length) { stats.appendChild(el("h3", { "class": "day", text: W("lines.stats_pairs") })); stats.appendChild(statTable(all.d, "Pair", { sort: "toi", dir: -1 })); }
+        stats.appendChild(el("p", { "class": "note", text: W("lines.stats_note") }));
+        body.appendChild(stats);
+      }
     }).catch(function () {
       body.innerHTML = "";
       body.appendChild(el("p", { "class": "empty", text: "The lines could not be loaded. Reload the page to try again." }));
