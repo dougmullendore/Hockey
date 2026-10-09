@@ -379,7 +379,6 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
 def main(state_dir: str, out_dir: str) -> int:
     state, out = Path(state_dir), Path(out_dir)
     state.mkdir(parents=True, exist_ok=True)
-    shutil.rmtree(state / "samples", ignore_errors=True)      # copies of the feed's answers, since moved to tests/fixtures
     now = dt.datetime.now(dt.timezone.utc)
     season = nhl.season_for(now.date())
     status = {"started_utc": now.isoformat(timespec="seconds"),
