@@ -291,11 +291,16 @@ def team_lines(games: list[dict], boxes: dict, counted: dict, people: dict, tabl
             dressed.append({"id": r["id"], "pos": r["pos"], "toi": r["toi"], "fo": (faced.get(str(r["id"])) or [0] * 5)[4],
                             "sh": (people.get(str(r["id"])) or {}).get("sh")})
         per_game = [counted[str(g["id"])][team] for g in mine]
-        # everyone who has skated for the team this season, for the season's lines
-        skated = {}
+        # everyone who has skated for the team this season, for the season's
+        # lines, and each one's ice time a game, which numbers the lines
+        skated, minutes = {}, {}
+        toi_at = nhl.SK.index("toi")
         for g in mine:
             for row in boxes[str(g["id"])]["home" if g["home"]["id"] == team else "away"]["sk"]:
                 skated.setdefault(row[0], row)
+                minutes.setdefault(row[0], []).append(row[toi_at])
+        for p in dressed:
+            p["avg"] = sum(minutes[p["id"]]) / len(minutes[p["id"]])
         others = {pid: {"pos": row[3], "sh": (people.get(str(pid)) or {}).get("sh")} for pid, row in skated.items()}
         found = lines.team_lines(per_game[0], per_game[:lines.SPECIAL_GAMES], per_game, dressed, others)
         # everyone in a special-teams unit, forwards before defensemen

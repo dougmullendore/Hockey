@@ -8,7 +8,9 @@ were out on the power play and the penalty kill.
 A team's lines are then read off its latest game: the three forwards who
 spent the most time together are a line, then the next three among the
 rest, and so on; defense pairs the same way. Lines are numbered by how much
-they played. Power-play and penalty-kill units come from the last few games
+their players play: their ice time a game this season in all situations. So
+the first pair is the one on the ice most, even if its two also take shifts
+with others. Power-play and penalty-kill units come from the last few games
 (PP_GAMES), because one game has too little of either to go on.
 
 With the play-by-play alongside, it also counts what happened while each
@@ -185,7 +187,8 @@ def arrange(ids: list[int], pos: dict, faceoffs: dict) -> list[int]:
 def team_lines(latest: dict, recent: list[dict], season: list[dict], dressed: list[dict], others: dict | None = None) -> dict:
     """One team's lines. `latest` is its newest game's counts, `recent` its
     last few games' (newest first), `season` all of them; `dressed` is who
-    played in the newest game: [{"id", "pos", "toi", "fo", "sh"}]; `others`
+    played in the newest game: [{"id", "pos", "toi", "fo", "sh", "avg"}]
+    ("avg" is his ice time a game this season); `others`
     is {id: {"pos", "sh"}} for anyone else who has played this season."""
     pos = {p["id"]: p["pos"] for p in dressed}
     faceoffs = {p["id"]: p.get("fo", 0) for p in dressed}
@@ -225,9 +228,18 @@ def team_lines(latest: dict, recent: list[dict], season: list[dict], dressed: li
     def left_first(ids):
         return sorted(ids, key=lambda p: (hand.get(p) != "L", ids.index(p))) if {hand.get(p) for p in ids} == {"L", "R"} else ids
 
-    forwards = _greedy(latest.get("f") or [], 3, (len(fwd_pool) + 2) // 3, fwd_pool)
+    ice_time = {p["id"]: p.get("avg", p["toi"]) for p in dressed}
+
+    def busiest_first(rows):
+        """Number the lines by how much their players play: their ice time a
+        game this season, all situations counted. The top pair is the one
+        that is out there most, even when its two share their five-on-five
+        time with others."""
+        return sorted(rows, key=lambda r: -sum(ice_time.get(p, 0) for p in r[0]) / max(1, len(r[0])))
+
+    forwards = busiest_first(_greedy(latest.get("f") or [], 3, (len(fwd_pool) + 2) // 3, fwd_pool))
     forwards = [[arrange(ids, pos, faceoffs), secs] for ids, secs in forwards]
-    pairs = _greedy(latest.get("d") or [], 2, (len(def_pool) + 1) // 2, def_pool)
+    pairs = busiest_first(_greedy(latest.get("d") or [], 2, (len(def_pool) + 1) // 2, def_pool))
     # a left shot on the left when the two shoot different ways
     pairs = [[left_first(ids), secs] for ids, secs in pairs]
     return {"f": with_season(forwards), "d": with_season(pairs),

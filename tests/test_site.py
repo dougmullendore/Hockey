@@ -381,7 +381,12 @@ def test_lines_are_read_off_a_real_shift_chart():
     assert len(found["f"]) == 4 and len(found["d"]) == 3 and len(found["pp"]) == 2 and len(found["pk"]) == 2
     everyone = [p for row in found["f"] for p in row["ids"]]
     assert len(everyone) == 12 == len(set(everyone))                                # each forward on one line only
-    assert [name(r["ids"]) for r in found["d"]][:2] == [["Jones", "Mikkola"], ["Ekblad", "Forsling"]]
+    assert sorted(name(r["ids"]) for r in found["d"])[:2] == [["Ekblad", "Forsling"], ["Jones", "Mikkola"]]
+    # numbered by how much the players play, not by time together: the busiest pair first
+    busy = [sum(ice[p] for p in r["ids"]) / len(r["ids"]) for r in found["d"]]
+    assert busy == sorted(busy, reverse=True) and [sum(ice[p] for p in r["ids"]) for r in found["f"]] == sorted((sum(ice[p] for p in r["ids"]) for r in found["f"]), reverse=True)
+    quiet = [{**p, "avg": 1 if p["id"] in found["d"][0]["ids"] else p["toi"]} for p in dressed]     # ice time a game this season counts, when it is given
+    assert lines.team_lines(fla, [fla], [fla, fla], quiet)["d"][-1]["ids"] == found["d"][0]["ids"]
     assert found["f"][0]["season"] == 2 * found["f"][0]["toi"] and found["f"][0]["games"] == 2
     assert not set(found["pp"][0]["ids"]) & set(found["pp"][1]["ids"]) and len(found["pk"][0]["ids"]) == 4
     assert pos[found["f"][0]["ids"][0]] == "L"                                      # Marchand, the listed left wing, on the left

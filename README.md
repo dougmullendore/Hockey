@@ -38,9 +38,11 @@ shift charts, which list every shift of every game (`pipeline/lines.py`).
 
 - The three forwards who spent the most five-on-five time together in the
   team's last game are a line, then the next three among the rest, and so on;
-  defense pairs the same way. Lines are numbered by ice time together, and
-  each shows that time and how long the same players have been together over
-  the season.
+  defense pairs the same way. Lines are numbered by how much their players
+  play: their ice time a game this season in all situations (power play and
+  penalty kill included). So the first pair is the one on the ice most, even
+  when its two also take shifts with others. Each shows its five-on-five time together
+  and how long the same players have been together over the season.
 - Power-play and penalty-kill units are the groups out together most over
   the last three games (one game has too little of either to go on).
 - The goalie who started the last game is first, then the others on the roster.
