@@ -1,0 +1,251 @@
+# GOAT Hockey
+
+Every NHL game, week by week, with each team's chance of winning, where to
+watch and the score as it happens; the standings and a GOAT ranking of the 32
+teams; team and player stats; and a page for every team, game and player.
+
+It is the hockey version of the volleyball site
+(github.com/dougmullendore/Volleyball) and works the same way.
+
+You do not need to run anything. GitHub does it all on a schedule.
+
+## What the site shows
+
+- **Games** (first page): every game this week, grouped by day. Games still to
+  come show the start time in the reader's own time zone, each team's chance
+  of winning and where to watch; finished ones show the score (with OT or SO
+  when it went past regulation) and link to the box score. Buttons step to
+  earlier and later weeks, and a menu narrows the list to one team's whole
+  season. The number beside each team is its place in the league standings.
+- **Standings** (second page): the league's own table, by division, as the
+  wild-card playoff picture, by conference or for the whole league, plus the
+  site's own GOAT ranking.
+- **Teams** (third page): a sortable table of every team's stats per game.
+- **Players** (fourth page): every regular ranked by Impact per game; each
+  name opens a card with his percentiles.
+
+## Team pages
+
+Every team name on the site links to that team's page (`#/team/DAL`): its
+record and places in the division, conference, league and GOAT ranking, its
+results against the GOAT top ten, the next five games and latest five
+results, its team stats (each with its place among the 32), and its skaters
+and goalies.
+
+## Game pages and live box scores
+
+Every game links to its own page (`#/game/<number>`). At the top is a **score
+card**: the score, the goals period by period, each team's chance of winning
+(before the game, for a finished one) and a side-by-side team comparison
+(shots, faceoffs, power play, hits, blocked shots, takeaways, giveaways,
+penalty minutes). Below it are the goals in order with who assisted, the
+three stars, and both teams' box scores: every skater's goals, assists,
+plus-minus, shots, hits, blocks, penalty minutes, giveaways, takeaways,
+faceoff percentage, shifts and ice time, and every goalie's shots, saves and
+decision. Player names link to their cards.
+
+- The score is read by the page itself from ESPN, every 15 seconds while a
+  game is on.
+- The NHL's own feed cannot be read by a web page directly, so the GitHub
+  job fetches the box scores: on game days (September to June, about 11am to
+  2am Central) it runs every 5 minutes, and when any game is under way it
+  refreshes those games' box scores and the standings and rebuilds the site.
+  When nothing is being played it stops within seconds. GitHub's scheduled
+  runs are often a few minutes late.
+- Games in progress show a red LIVE tag.
+
+## Teams
+
+The **Teams** page (`pipeline/teams.py`) shows each team's record and points,
+goals for and against per game, shots for and against per game, shooting and
+save percentage, power play and penalty kill, faceoffs won, hits, blocked
+shots and penalty minutes per game, where the site's rating places the team,
+and strength of schedule (the average rating of its opponents, ranked among
+the 32). Regular season only. A shootout win adds a goal to the final score
+but is not counted as a goal scored.
+
+## Players
+
+The **Players** page ranks every regular against the rest, skaters together
+and goalies on their own, and each name opens a card.
+
+- **Impact per game** is the ranking number. Impact is a box-score rating in
+  the style of hockey's "game score". Each thing a skater does is worth a set
+  number of points: a goal 0.75, a first assist 0.70, a second assist 0.55, a
+  shot on goal 0.075, a blocked shot 0.05, a takeaway 0.03 (a giveaway costs
+  the same), a minor penalty drawn 0.15 (one taken costs the same), and each
+  goal of plus-minus 0.15. His total is compared with what an average forward
+  or defenseman would have piled up in the same ice time, so Impact is points
+  added over an average player at his position. The reasoning is at the top
+  of `pipeline/players.py`.
+- **A goalie's Impact** is the goals he saved beyond what an average goalie
+  would have on the same shots, counted separately at even strength, against
+  the power play and shorthanded, at 0.75 a goal.
+- **Percentiles** compare a player with regulars at his own position:
+  forwards with forwards, defensemen with defensemen, goalies with goalies.
+- **A regular** skater has played at least 40% of his team's games, a regular
+  goalie 20%. Part-time players are listed (tick the box) but not ranked.
+- A traded player is one player: his numbers from both teams are added up
+  and he is listed with his new team.
+
+What it cannot do: it sees only the box score, so it knows nothing about shot
+quality, who else was on the ice, or how strong the opponent was. Early in
+the season a game or two can move a player a long way. Regular season only.
+
+## Player photos and details
+
+Each player's full name, photo, height, weight, shooting hand, age and
+birthplace come from his team's roster in the NHL's feed, read once a day. A
+player who has played but is on no roster that day (sent to the minors, say)
+is looked up on his own. The photos are not copied into this repository: the
+site shows them from the NHL's site. To remove them all, set
+`SHOW_PHOTOS = False` in `pipeline/config.py`.
+
+## Team logos
+
+Logos appear beside team names everywhere on the site, and stand in for the
+names in the Beat and Lost to boxes. Each is shown in a white circle with a
+ring (`.logo` in `site/styles.css`), straight from the NHL's site; they are
+not stored in this repository. If a logo cannot be loaded, the team's short
+code (DAL, COL) is shown in its place. To remove them, set `LOGO_URL = ""` in
+`pipeline/config.py`.
+
+## GOAT ranking
+
+The Standings page's GOAT Ranking button shows the site's own ranking of the
+32 teams (`pipeline/goat.py`), redone on every run. Four things decide it,
+most important first:
+
+1. **Head to head.** A team is ranked above one it leads in their season
+   series, unless the other three factors say the gap between them is wide
+   (`GOAT_HEAD_TO_HEAD`). Results that form a circle cannot all be honored;
+   the ranking keeps as many as it can.
+2. **Strength of schedule:** the average rating of the teams it has played
+   (the ratings behind the odds).
+3. **The standings:** a team gets credit for its place in the league table.
+4. **Record:** its share of games won.
+
+Factors 2 to 4 are combined with the weights in `GOAT_WEIGHTS` (0.5, 0.3,
+0.2). Beside each team are its results against the GOAT top ten.
+
+## Odds
+
+Each game not yet played shows both teams' chance of winning, the favorite
+in bold. These are the site's own estimate, not a sportsbook's line.
+
+- Every team has a rating, built from goals for and against and who they
+  were against. It moves after each game, quickly early in the season and
+  slowly later, and a team starts each season on 80% of where it finished
+  the last one. Home ice is worth a little; at neutral sites it is left out.
+  A win by more than four goals counts as four.
+- Tested on 5,592 games from 2022-23 to 2025-26, always predicting from what
+  was known beforehand, the favorite won 58.0% of the time (the home team
+  wins 53.5%), and the percentages were honest: teams given 60 to 70% won
+  65%. Hockey is close: few games are ever more lopsided than 70-30.
+- It knows results, not rosters: an injury or a trade only shows once the
+  scores change, and it does not know who is starting in goal.
+- Ratings are kept in `ratings.json` on the `state` branch, so next season
+  starts from this one by itself. `ratings/seed.json` holds where teams
+  finished 2025-26, for this first season. The settings are in
+  `pipeline/config.py` and the method at the top of `pipeline/odds.py`.
+
+## Where to watch
+
+Each game still to come shows the channels and streaming services the league
+lists for it: national ones first (ESPN, TNT, ESPN+ and so on), then the two
+teams' own channels, American before Canadian, four at most. "No broadcast
+listed" means the league names none yet for a game in the next two weeks.
+Channels are refreshed on every run and can change late; the footer says so.
+
+## Live scores
+
+While a game is being played, the page itself re-reads ESPN's public
+scoreboard every 15 seconds and updates that game's row: the score, the
+period and the time left, and "Final" when it ends. This happens in the
+reader's browser, so it needs no extra runs on GitHub. It starts 15 minutes
+before a game's listed start time and pauses while the tab is in the
+background. If ESPN cannot be reached, the row simply stays as it was (the
+job's own five-minute refresh still moves it along).
+
+## When it updates
+
+The file `.github/workflows/update.yml` tells GitHub when to run:
+
+| When | What it does |
+| --- | --- |
+| Every morning about 5:47am Central, and again about 11:47am | Schedule, scores, channels, standings, box scores, rosters, ratings and the GOAT ranking |
+| Every night about 3:17am Central | A third full refresh, once the late games on the west coast are over |
+| Every 5 minutes, 11am to 2am Central, September to June | Scores, box scores and standings while a game is under way |
+| Whenever the code changes, or you press **Run workflow** on the **Actions** tab | Everything, straight away (after running the tests) |
+
+## A new season, trades and new teams
+
+Nothing needs doing. On September 1 the job starts looking for the new
+season's schedule, and the ratings carry over. Players, teams and their
+names all come from the league's feed, so a trade, a call-up, a renamed or a
+new team shows up on the next run. The playoffs are listed on the Games page
+with their round; standings, team stats and player ratings stay regular
+season only.
+
+If the league's feed cannot be read, the site keeps what it had, the run is
+marked failed, it shows red on the Actions tab and GitHub emails you. It
+tries again on the next run by itself.
+
+## Changing the wording
+
+All the site's headings, intro lines, notes, button labels and the footer are
+in one file, `site/words.txt`, one `name = words` line each. Change the words
+after the `=` on GitHub (open the file, click the pencil, then Commit changes)
+and the site updates in about two minutes. A broken line stops the update and
+leaves the old site up; GitHub emails you, and the run log names the line.
+
+## Where things are
+
+| Path | What it is |
+| --- | --- |
+| `pipeline/config.py` | Every setting: season dates, odds settings, GOAT weights, what to show |
+| `pipeline/nhl.py` | Reads the league's feed: schedule, standings, box scores, rosters |
+| `pipeline/players.py` | Rates the players against each other and works out percentiles |
+| `pipeline/teams.py` | Adds up each team's stats from the box scores |
+| `pipeline/goat.py` | The GOAT ranking: a score rearranged to respect head-to-head results |
+| `pipeline/odds.py` | Rates every team from results and turns two ratings into a chance of winning |
+| `pipeline/web.py` | Downloading, with retries |
+| `pipeline/run.py` | The job: update everything stored, then build the page |
+| `ratings/seed.json` | Where each team's rating finished 2025-26 |
+| `site/` | The page itself (plain HTML, CSS and JavaScript, no build step) |
+| `tests/` | Checks that the feed's documents are read correctly and the site builds |
+
+Run the tests with `python tests/run_local.py`.
+
+Two side branches of this repository hold what the job produces:
+
+- `state`: the season's games (`schedule.json`), the standings
+  (`standings.json`), the box scores (`box.json`), players' details
+  (`people.json`), the ratings (`ratings.json`), and what happened on the
+  last run (`status.json`, `logs/last_run.log`).
+- `gh-pages`: the finished page.
+
+## Turning the website on
+
+It is already on. If it ever needs doing again, in the repository's
+**Settings → Pages → Build and deployment → Source: "Deploy from a branch"**,
+choose branch `gh-pages` and folder `/ (root)`, and save.
+
+The page is at `https://dougmullendore.github.io/Hockey/`.
+
+## Good to know
+
+- The numbers beside teams are today's places in the standings, including on
+  earlier weeks' games.
+- A game's date is the league's own date for it (the date where it is
+  played), while its time is shown in the reader's time zone, so a late game
+  on the west coast can show a time after midnight.
+- The earlier, larger version of this site (expected goals, WAR, player
+  cards, contracts, playoff odds) is in this repository's history, last at
+  commit `e01f7ce`. The games it stored are still on the `data` branch, which
+  the new site does not use.
+- GitHub switches off scheduled jobs in a repository with no activity for 60
+  days. Each run switches the job back on, so the updates keep going through
+  the summer without anyone committing.
+
+Not affiliated with or endorsed by the NHL or any team.

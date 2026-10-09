@@ -706,7 +706,7 @@
     if (p == null) return null;
     var two = pct(p);
     return el("div", { "class": "gc-odds" }, [
-      el("span", { "class": "gc-lab", text: g.p != null ? "Chance of winning" : "Chance of winning before the game" }),
+      el("span", { "class": "gc-lab", text: g.p != null && !(g.start && Date.now() / 1000 > g.start) ? "Chance of winning" : "Chance of winning before the game" }),
       el("div", { "class": "gc-bar" }, [el("span", { "class": "a", style: "width:" + two[0], text: g.away.name + " " + two[0] }),
         el("span", { "class": "h", style: "width:" + two[1], text: two[1] + " " + g.home.name })])]);
   }
@@ -714,7 +714,7 @@
     holder.innerHTML = "";
     if (!lines || !lines.length) return;
     var s = now(g), head = el("tr", {}, [el("th", { scope: "col", "class": "l", text: "Period" })]);
-    lines.forEach(function (p) { head.appendChild(el("th", { scope: "col", text: periodName(p[0], p[1]) })); });
+    lines.forEach(function (p) { head.appendChild(el("th", { scope: "col", title: p[1] === "SO" ? "Shootout: one goal to the winner" : null, text: p[1] === "SO" ? "SO" : periodName(p[0], p[1]) })); });
     if (s.end === "SO" && !lines.some(function (p) { return p[1] === "SO"; })) head.appendChild(el("th", { scope: "col", title: "Shootout", text: "SO" }));
     head.appendChild(el("th", { scope: "col", text: s.fin ? "Final" : "Total" }));
     function line(i, x, total, other) {

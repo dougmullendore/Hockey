@@ -93,6 +93,16 @@ def test_seasons_and_weeks():
     assert gaps == {7}                               # the feed answers with seven days from the date asked for
 
 
+def test_a_real_week_of_the_schedule_is_read():
+    week = nhl.parse_week(fixture("schedule_2026-10-09.json.gz"))
+    assert len(week) == 53 and {g["date"] for g in week} == {f"2026-10-{d:02d}" for d in range(9, 16)}
+    first = week[0]
+    assert first == {"id": 2026020066, "date": "2026-10-09", "start": 1791586800, "type": 2, "state": "upcoming", "note": "", "round": "",
+                     "away": {"id": "SEA", "name": "Kraken", "score": None}, "home": {"id": "DET", "name": "Red Wings", "score": None},
+                     "tv": ["DSN", "Prime Video", "KING", "KONG"]}
+    assert all(g["start"] and 1 <= len(g["tv"]) <= config.WATCH_MAX for g in week)
+
+
 # ----------------------------------------------------------- the standings --
 def standing(abbr, name, seq, w, l, o, conf="Western", div="Central", **more):
     t = {"teamAbbrev": {"default": abbr}, "teamName": {"default": name}, "teamCommonName": {"default": name.split()[-1]},
@@ -116,6 +126,20 @@ def test_standings_are_read():
     assert (r["gp"], r["w"], r["l"], r["otl"], r["pts"], r["pct"]) == (5, 4, 1, 0, 8, 0.8)
     assert r["home"] == "4-0-0" and r["away"] == "0-1-0" and r["l10"] == "4-1-0" and r["streak"] == "W4" and r["diff"] == 9
     assert table[2]["clinch"] == "x" and table[2]["otl"] == 1 and table[2]["pts"] == 7
+
+
+def test_the_real_standings_are_read():
+    table = nhl.parse_standings(fixture("standings_now.json.gz"))
+    assert len(table) == 32 and [t["rank"] for t in table] == list(range(1, 33))
+    assert table[0] == {"id": "NYR", "name": "New York Rangers", "short": "Rangers", "place": "NY Rangers", "conf": "Eastern",
+                        "div": "Metropolitan", "rank": 1, "conf_rank": 1, "div_rank": 1, "wc": 0, "clinch": "", "gp": 5, "w": 4, "l": 1,
+                        "otl": 0, "pts": 8, "pct": 0.8, "rw": 4, "row": 4, "gf": 16, "ga": 8, "diff": 8, "home": "3-0-0", "away": "1-1-0",
+                        "l10": "4-1-0", "streak": "W4"}
+    sizes = {}
+    for t in table:
+        sizes[(t["conf"], t["div"])] = sizes.get((t["conf"], t["div"]), 0) + 1
+    assert sizes == {("Eastern", "Atlantic"): 8, ("Eastern", "Metropolitan"): 8, ("Western", "Central"): 8, ("Western", "Pacific"): 8}
+    assert all(t["pts"] == 2 * t["w"] + t["otl"] and t["gp"] == t["w"] + t["l"] + t["otl"] for t in table)
 
 
 # -------------------------------------------------------------- box scores --
@@ -200,6 +224,40 @@ def test_a_box_score_without_its_summary_is_kept_but_marked():
     assert b["status"] == "L" and not b["full"] and b["goals"] == [] and b["line"] == []
     assert b["tstats"]["away"]["sog"] == 37 and b["tstats"]["home"]["hits"] == 3     # added up from the players
     assert "ppo" not in b["tstats"]["home"]
+
+
+def test_a_real_box_score_is_read():
+    """Toronto at Vegas, October 8, 2026: Vegas won 4-3 in a shootout."""
+    b = nhl.parse_box(*(fixture(f"gamecenter_2026020065_{part}.json.gz") for part in ("boxscore", "landing", "right-rail")))
+    assert b["status"] == "F" and b["full"] and b["date"] == "2026-10-08"
+    assert len(b["away"]["sk"]) == 18 and len(b["home"]["sk"]) == 18 and len(b["away"]["g"]) == 1 and len(b["home"]["g"]) == 1
+    assert b["line"] == [[1, "REG", 3, 1], [2, "REG", 0, 2], [3, "REG", 0, 0], [4, "OT", 0, 0], [5, "SO", 0, 1]]
+    assert len(b["goals"]) == 6                                        # the shootout winner is not a goal scored
+    assert b["goals"][0] == [1, "REG", "00:34", 0, 8478458, [8479318, 8480893], "ev", "none", 1, 0, "J. Roslovic"]
+    assert b["goals"][5][7] == "penalty-shot" and b["goals"][5][5] == [] and b["goals"][5][8:10] == [3, 3]
+    assert [s[1] for s in b["stars"]] == ["VGK", "VGK", "VGK"] and b["stars"][1][0] == 8478403
+    for side, goals in (("away", 3), ("home", 3)):
+        rows = [dict(zip(nhl.SK, r)) for r in b[side]["sk"]]
+        assert sum(r["g"] for r in rows) == goals and sum(r["sog"] for r in rows) == b["tstats"][side]["sog"]
+        assert sum(r["a1"] for r in rows) == sum(1 for g in b["goals"] if g[3] == (side == "home") and g[5])
+        assert all(300 < r["toi"] < 2100 for r in rows)
+    hill = dict(zip(nhl.GK, b["home"]["g"][0]))
+    assert (hill["name"], hill["sa"], hill["sv"], hill["ga"], hill["dec"], hill["start"]) == ("A. Hill", 24, 21, 3, "W", 1)
+    assert hill["es_sa"] + hill["pp_sa"] + hill["sh_sa"] == hill["sa"] and b["away"]["g"][0][8] == "O"
+    assert b["tstats"]["home"] == {"sog": 43, "fow": 25, "fot": 62, "ppg": 0, "ppo": 4, "pim": 2, "hits": 27, "blk": 15, "gv": 17, "tk": 3}
+    # Toronto took four minors (Vegas had four power plays) and Vegas one; each was drawn by someone
+    taken = {side: sum(r[nhl.SK.index("pt")] for r in b[side]["sk"]) for side in ("away", "home")}
+    drawn = {side: sum(r[nhl.SK.index("pd")] for r in b[side]["sk"]) for side in ("away", "home")}
+    assert taken == {"away": 4, "home": 1} and drawn == {"away": 1, "home": 4}
+
+
+def test_a_real_roster_is_read():
+    roster = nhl.parse_roster(fixture("roster_DAL_current.json.gz"), "DAL")
+    assert len(roster) == 24 and all(p["team"] == "DAL" and p["first"] and p["last"] and p["photo"].startswith("https://") for p in roster)
+    assert roster[0] == {"id": 8473994, "first": "Jamie", "last": "Benn", "num": 14, "pos": "L", "sh": "L", "ht": 75, "wt": 210,
+                         "born": "1989-07-18", "from": "Victoria, BC, CAN", "team": "DAL",
+                         "photo": "https://assets.nhle.com/mugs/nhl/20262027/DAL/8473994.png"}
+    assert {p["pos"] for p in roster} == {"C", "L", "R", "D", "G"}
 
 
 def test_a_roster_is_read():

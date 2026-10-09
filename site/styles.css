@@ -445,3 +445,4 @@ a.opp:hover .n { color: var(--teal); }
 @media (max-width: 640px) { .when .d { display: inline; margin-right: 8px; } }
 .stm .abbr { display: none; font-weight: 600; }
 @media (max-width: 640px) { .stm .full { display: none; } .stm .abbr { display: inline; } }
+.pc-id .pc-team { flex-wrap: wrap; }

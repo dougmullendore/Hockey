@@ -376,27 +376,10 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
             "missing_box": [g["id"] for g in games if g["state"] == "final" and not g.get("box")][:20]}
 
 
-def keep_samples(state: Path, now: dt.datetime) -> dict:
-    """Once: keep a copy of a few documents exactly as the feed sent them, for the tests."""
-    import gzip
-    dest = state / "samples"
-    if dest.exists():
-        return {"kept": "already"}
-    sched = read_json(state / "schedule.json", {})
-    done = in_order(g for g in (sched.get("games") or {}).values() if g["state"] == "final")
-    extra = [g for g in done if g.get("end") in ("OT", "SO")][-2:]
-    paths = [f"schedule/{now.date().isoformat()}", "standings/now", "roster/DAL/current"]
-    for g in done[-1:] + extra:
-        paths += [f"gamecenter/{g['id']}/{part}" for part in ("boxscore", "landing", "right-rail")]
-    dest.mkdir(parents=True)
-    for path in dict.fromkeys(paths):
-        (dest / (path.replace("/", "_") + ".json.gz")).write_bytes(gzip.compress(web.get_bytes(config.API + path), mtime=0))
-    return {"kept": len(paths)}
-
-
 def main(state_dir: str, out_dir: str) -> int:
     state, out = Path(state_dir), Path(out_dir)
     state.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(state / "samples", ignore_errors=True)      # copies of the feed's answers, since moved to tests/fixtures
     now = dt.datetime.now(dt.timezone.utc)
     season = nhl.season_for(now.date())
     status = {"started_utc": now.isoformat(timespec="seconds"),
@@ -428,7 +411,6 @@ def main(state_dir: str, out_dir: str) -> int:
         stage("standings", lambda: update_standings(state, now))
         stage("box scores", lambda: update_boxes(state, now))
         stage("people", lambda: update_people(state, now))
-        stage("samples", lambda: keep_samples(state, now))
     stage("site", lambda: build_site(state, out, now))
     status["finished_utc"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     status["ok"] = all(s["ok"] for s in status["stages"].values())
