@@ -50,16 +50,18 @@
     });
     return pic;
   }
-  // A player's photo, shown from the NHL's own site; his initials if there is none.
+  // A player's photo, shown from the NHL's own site. His initials appear only when
+  // there is no photo, or it cannot be loaded (the photos have see-through backgrounds).
   function face(p, cls) {
     var initials = p.name.split(/\s+/).map(function (w) { return w.charAt(0); }).join("").slice(0, 2).toUpperCase();
-    var box = el("span", { "class": "face " + (cls || ""), "aria-hidden": "true" }, [el("span", { text: initials })]);
+    var box = el("span", { "class": "face " + (cls || ""), "aria-hidden": "true" });
+    function letters() { box.classList.remove("has"); box.textContent = ""; box.appendChild(el("span", { text: initials })); }
     if (p.photo) {
       var img = el("img", { src: p.photo, alt: "", loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" });
-      img.addEventListener("load", function () { box.classList.add("has"); });
-      img.addEventListener("error", function () { if (img.parentNode) img.parentNode.removeChild(img); });
+      img.addEventListener("error", letters);
+      box.classList.add("has");
       box.appendChild(img);
-    }
+    } else letters();
     return box;
   }
   // A team's name as a link to its page.

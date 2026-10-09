@@ -77,8 +77,14 @@ h2 { font: 700 1.375rem/1.2 "Barlow Condensed", sans-serif; margin: 0; }
 
 /* each team's colour logo, shown from the NHL's site, sits in a white circle with a ring, like the player photos */
 .logo { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; line-height: 0; border-radius: 50%;
-  background: #fff; box-shadow: inset 0 0 0 2px var(--ball); }
-.logo img { width: 74%; height: 74%; object-fit: contain; }
+  background: #fff; }
+.logo { position: relative; overflow: hidden; }
+/* the logo files have a wide empty margin, so the picture is drawn larger than the circle
+   and the circle trims the margin; the ring is drawn on top so it is always whole */
+.logo img { width: 115%; height: 115%; max-width: none; object-fit: contain; }
+.logo::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--ball); }
+.logo.big::after, .logo.gc::after { box-shadow: inset 0 0 0 3px var(--ball); }
+.logo.badge::after { content: none; }
 .logo.big { width: 76px; height: 76px; }
 .logo.sm { width: 22px; height: 22px; vertical-align: -6px; margin-left: 3px; }
 
@@ -341,7 +347,6 @@ a.opp:hover .n { color: var(--teal); }
 
 /* photos in the team pages' player lists */
 .ptable .nm .face { width: 40px; height: 40px; font-size: .8125rem; }
-.logo.big { box-shadow: inset 0 0 0 3px var(--ball); }
 
 @media (max-width: 640px) {
   /* on a phone the away team is the top line and home the bottom: say so once, at the top */
@@ -362,7 +367,7 @@ a.opp:hover .n { color: var(--teal); }
 .gc-team { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
 .gc-team:last-child { grid-template-columns: auto 1fr auto; direction: rtl; }
 .gc-team:last-child > * { direction: ltr; }
-.gc-team .logo.gc { width: 56px; height: 56px; box-shadow: inset 0 0 0 3px var(--ball); }
+.gc-team .logo.gc { width: 56px; height: 56px; }
 .gc-name { display: flex; align-items: center; gap: 8px; font: 700 1.25rem/1.15 "Barlow Condensed", sans-serif; min-width: 0; }
 .gc-team:last-child .gc-name { justify-content: flex-end; }
 .gc-sets { font: 700 3rem/1 "Barlow Condensed", sans-serif; font-variant-numeric: tabular-nums; }
