@@ -78,7 +78,7 @@
 
   // ---- the standings page ----
   var standView = "division";
-  var SCOLS = [   // heading, meaning, value, class
+  var STAND = [   // heading, meaning, value, class
     ["GP", "Games played", function (t) { return t.gp; }], ["W", "Wins", function (t) { return t.w; }], ["L", "Losses in regulation", function (t) { return t.l; }],
     ["OTL", "Losses in overtime or a shootout, worth one point", function (t) { return t.otl; }],
     ["PTS", "Points: 2 for a win, 1 for an overtime or shootout loss", function (t) { return t.pts; }, "strong"],
@@ -89,7 +89,8 @@
     ["Home", "Record at home", function (t) { return t.home; }], ["Away", "Record on the road", function (t) { return t.away; }],
     ["L10", "Record in the last ten games", function (t) { return t.l10; }], ["Streak", "W wins, L losses, OT overtime losses in a row", function (t) { return t.streak || "–"; }]
   ];
-  function standTable(rows, label, numberOf, cutAfter) {
+  function standTable(rows, label, numberOf, cutAfter, extra) {
+    var SCOLS = (extra || []).concat(STAND);
     var thead = el("thead", {}, [el("tr", {}, [el("th", { scope: "col", text: "#" }), el("th", { scope: "col", "class": "l", text: label })]
       .concat(SCOLS.map(function (c) { return el("th", { scope: "col", title: c[1], text: c[0] }); })))]);
     var body = el("tbody", {}, rows.map(function (t, i) {
@@ -98,17 +99,6 @@
         .concat(SCOLS.map(function (c) { return el("td", { "class": c[3] || "", text: String(c[2](t)) }); })));
     }));
     return el("div", { "class": "tablewrap", tabindex: "0", role: "region", "aria-label": label + " standings, scrolls sideways" }, [el("table", { "class": "ptable stand" }, [thead, body])]);
-  }
-  // A team's results against the GOAT top ten: "Beat 3 Stars x2. Lost to 1 Avalanche."
-  function versus(t) {
-    function box(label, rows, cls) {
-      var opps = rows.map(function (r) {
-        return el("a", { "class": "opp", href: "#/team/" + encodeURIComponent(r[3]), title: r[1] }, [el("span", { "class": "n", text: String(r[0]) }), logo(r[3], "sm", r[1]), r[2] > 1 ? el("span", { "class": "x", text: "x" + r[2] }) : null]);
-      });
-      return el("span", { "class": "vsbox " + cls }, [el("b", { text: label }),
-        el("span", { "class": "opps" }, opps.length ? opps : [el("span", { "class": "nil", text: W("standings.none_yet") })])]);
-    }
-    return el("span", { "class": "vs" }, [box(W("standings.beat"), t.beat || [], "beat"), box(W("standings.lost_to"), t.lost || [], "lostto")]);
   }
   function by(key) { return function (a, b) { return a[key] - b[key]; }; }
   function groups(key) { var seen = []; data.teams.forEach(function (t) { if (seen.indexOf(t[key]) < 0) seen.push(t[key]); }); return seen.sort(); }
@@ -123,18 +113,11 @@
     var read = data.standings_read ? new Date(data.standings_read) : null;
     $("rank-lede").textContent = standView === "goat" ? W("standings.lede_goat") : W("standings.lede", { date: read && !isNaN(read) ? read.toLocaleDateString(undefined, { month: "long", day: "numeric" }) : "" });
     $("goat-note").textContent = "";
-    if (standView === "goat") {
-      var head = el("div", { "class": "ranks-head", "aria-hidden": "true" });
-      ["GOAT", "Team", "Record", "League"].forEach(function (h) { head.appendChild(el("span", { text: h })); });
-      head.appendChild(el("span", { "class": "wide beat", text: W("standings.beat") }));
-      head.appendChild(el("span", { "class": "wide lostto", text: W("standings.lost_to") }));
-      var ol = el("ol", { "class": "ranks" }, teams.sort(by("goat")).map(function (t) {
-        return el("li", {}, [el("span", { "class": "rk", text: String(t.goat) }), el("span", { "class": "who" }, [logo(t.id), teamA(t.id, t.name, "nm")]),
-          el("span", { "class": "rec", text: record(t) }),
-          el("span", { "class": "mv", text: String(t.rank), "aria-label": ordinal(t.rank) + " in the league standings" }), versus(t)]);
-      }));
-      holder.appendChild(head); holder.appendChild(ol);
-      $("rank-note").textContent = W("standings.note_goat", { n: G.top });
+    if (standView === "goat") {       // the same table as the standings, in GOAT order
+      holder.appendChild(standTable(teams.sort(by("goat")), "Team", function (t) { return t.goat; }, null, [
+        ["League", "Place in the league standings", function (t) { return t.rank; }],
+        ["SOS", "Strength of schedule: 1 is the hardest, by the average rating of the teams played", function (t) { return t.sos_rank; }]]));
+      $("rank-note").textContent = W("standings.note_goat");
       $("goat-note").textContent = W("standings.note_goat_how", { standings: G.standings_wrong, goat: G.goat_wrong });
       return;
     }
@@ -841,8 +824,6 @@
     var bits = [record(t), t.pts + " points", ordinal(t.div_rank) + " in the " + t.div, ordinal(t.conf_rank) + " in the " + t.conf.replace(/ern$/, ""), ordinal(t.rank) + " in the league",
       "No. " + t.goat + " in the GOAT ranking"];
     box.appendChild(el("div", { "class": "thead" }, [logo(id, "big"), el("div", {}, [el("h1", { text: t.name }), el("p", { "class": "tsub", text: bits.join(" · ") })])]));
-    box.appendChild(el("div", { "class": "tvs" }, [versus(t)]));
-    box.appendChild(el("p", { "class": "note vsnote", text: W("team.versus_note", { n: (data.goat || {}).top }) }));
 
     // games: the latest results and what is next
     var next = mine.filter(function (g) { return g.state !== "final" && g.state !== "other" && g.date >= today; }).slice(0, 5);

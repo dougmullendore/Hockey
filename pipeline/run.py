@@ -317,20 +317,11 @@ def build_site(state: Path, out: Path, now: dt.datetime) -> dict:
     place = {t["id"]: t["rank"] for t in table}
     ranking = goat.rank(counted, rating, set(place), place)
     spot = {t: i + 1 for i, t in enumerate(ranking["order"])}
-    top = {t: n for t, n in spot.items() if n <= config.GOAT_TOP}
-    results = goat.head_to_head(counted)
     by_schedule = sorted(place, key=lambda t: -ranking["factors"][t][0])
     for t in table:
         t["goat"] = spot[t["id"]]
         t["sos_rank"] = by_schedule.index(t["id"]) + 1
-        t["beat"], t["lost"] = [], []
-        for other in sorted(top, key=top.get):
-            wins, losses, _ = results.get((t["id"], other), (0, 0, []))
-            if wins:
-                t["beat"].append([top[other], names[other]["short"], wins, other])
-            if losses:
-                t["lost"].append([top[other], names[other]["short"], losses, other])
-    goat_info = {"top": config.GOAT_TOP, "weights": config.GOAT_WEIGHTS,
+    goat_info = {"weights": config.GOAT_WEIGHTS,
                  # season series each order has the wrong way round
                  "standings_wrong": goat.contradictions(sorted(place, key=place.get), counted, set(place)),
                  "goat_wrong": goat.contradictions(ranking["order"], counted, set(place))}

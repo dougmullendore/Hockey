@@ -379,7 +379,7 @@ def test_game_night_runs_only_work_when_a_game_is_on():
 
 def test_the_wording_file_is_complete():
     words = run.read_words()
-    assert words["nav.games"] == "Games" and "{n}" in words["standings.note_goat"]
+    assert words["nav.games"] == "Games" and "{goat}" in words["standings.note_goat_how"]
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp)
         for name in ("app.js", "index.html", "words.txt"):
@@ -407,7 +407,7 @@ def test_the_site_is_built_from_what_is_stored():
         data = json.loads((out / "data.json").read_text())
         assert data["site"] == config.SITE_NAME and data["season"] == 2026 and [t["id"] for t in data["teams"]] == ["BOS", "UTA"]
         bos = data["teams"][0]
-        assert bos["goat"] == 1 and bos["beat"] == [[2, "Mammoth", 2, "UTA"]] and bos["lost"] == []
+        assert bos["goat"] == 1 and data["teams"][1]["goat"] == 2 and bos["sos_rank"] in (1, 2) and "beat" not in bos
         by = {g["id"]: g for g in data["games"]}
         assert by[2026020056]["box"] == 1 and 0 < by[2026020056]["p0"] < 1 and by[2026020056]["home"]["rank"] == 1
         # Utah, at home, has less of a chance than a home team level with its visitor

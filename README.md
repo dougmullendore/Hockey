@@ -27,8 +27,7 @@ You do not need to run anything. GitHub does it all on a schedule.
 ## Team pages
 
 Every team name on the site links to that team's page (`#/team/DAL`): its
-record and places in the division, conference, league and GOAT ranking, its
-results against the GOAT top ten, the next five games and latest five
+record and places in the division, conference, league and GOAT ranking, the next five games and latest five
 results, its team stats (each with its place among the 32), and its skaters
 and goalies.
 
@@ -103,8 +102,7 @@ site shows them from the NHL's site. To remove them all, set
 
 ## Team logos
 
-Logos appear beside team names everywhere on the site, and stand in for the
-names in the Beat and Lost to boxes. Each is shown in a white circle with a
+Logos appear beside team names everywhere on the site. Each is shown in a white circle with a
 ring (`.logo` in `site/styles.css`), straight from the NHL's site; they are
 not stored in this repository. If a logo cannot be loaded, the team's short
 code (DAL, COL) is shown in its place. To remove them, set `LOGO_URL = ""` in
@@ -126,7 +124,8 @@ most important first:
 4. **Record:** its share of games won.
 
 Factors 2 to 4 are combined with the weights in `GOAT_WEIGHTS` (0.5, 0.3,
-0.2). Beside each team are its results against the GOAT top ten.
+0.2). The ranking is shown as the same table as the standings, in GOAT
+order, with each team's place in the league and its strength of schedule.
 
 ## Odds
 

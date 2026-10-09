@@ -40,12 +40,9 @@ standings.button_wildcard = Wild Card
 standings.button_conference = Conference
 standings.button_league = League
 standings.button_goat = GOAT Ranking
-standings.beat = Beat
-standings.lost_to = Lost to
-standings.none_yet = None yet
 standings.note = Two points for a win, one for a loss in overtime or a shootout. Teams level on points are separated the league's way: fewer games played, then regulation wins. Hold or hover over a column heading for what it means; choose a team to see its page.
 standings.note_line = The line marks the playoff places: the top three in each division, and the two best of the rest in each conference as wild cards.
-standings.note_goat = Beside each team are its results this season against the GOAT top {n}, with their GOAT places. The League column is the team's place in the standings. Redone after every game.
+standings.note_goat = The same columns as the standings, in this site's order. League is the team's place in the standings; SOS ranks the 32 by how strong their opponents have been (1 is the hardest). Redone after every game.
 standings.note_goat_how = Every team is ranked on four things, most important first: head to head, strength of schedule (the average rating of the teams played), its place in the standings, and its record. A team is ranked above one it leads in their season series unless the other three say the gap is wide. The standings rank a team below one it leads head to head {standings} times; the GOAT ranking does {goat} times.
 
 # ---- Teams page ----
@@ -60,7 +57,6 @@ team.latest_results = Latest results
 team.stats = Team Stats
 team.players = Players
 team.players_note = # is his rank by Impact per game among all regular skaters in the league (goalies are ranked among goalies); part-time players are greyed and not ranked. Choose a name for his card.
-team.versus_note = Results this season against the GOAT top {n}, with their GOAT places.
 
 # ---- Players page ----
 players.title = NHL Players

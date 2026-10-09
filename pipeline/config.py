@@ -46,7 +46,6 @@ ODDS_TESTED = {"games": 5592, "favorite_won": 0.580, "home_won": 0.535, "seasons
 GOAT_WEIGHTS = (0.5, 0.3, 0.2)   # strength of schedule, place in the standings, record
 GOAT_HEAD_TO_HEAD = 0.15  # a head-to-head lead outweighs a score gap up to this size (scores run 0 to 1)
 GOAT_REACH = 40           # how far up or down the order one move can take a team
-GOAT_TOP = 10             # the Beat and Lost to boxes list results against this many top teams
 
 # Where to watch: the channels the league lists for each game. Networks in
 # these countries are shown, national ones first.

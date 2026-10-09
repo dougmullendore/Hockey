@@ -97,31 +97,7 @@ h2 { font: 700 1.375rem/1.2 "Barlow Condensed", sans-serif; margin: 0; }
 .face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; }
 .face.big { width: 120px; height: 120px; font-size: 2.4rem; border-width: 3px; }
 
-/* ---- rankings page: one compact line per team ---- */
-.ranks { list-style: none; margin: 0; padding: 0; background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; }
-.ranks li, .ranks-head { display: grid; grid-template-columns: 2.25rem 1fr 3.25rem 3rem; align-items: center; gap: 10px; padding: 7px 12px; font-size: .9375rem; }
-.ranks li { border-top: 1px solid var(--line); }
-.ranks-head { padding-top: 0; padding-bottom: 6px; font-size: .75rem; font-weight: 600; color: var(--ink-2); }
-.ranks-head span:nth-child(n+3) { text-align: right; }
-.ranks-head .wide { display: none; }
 .nav button[aria-pressed="true"] { background: var(--teal-soft); border-color: var(--teal); }
-.ranks li:first-child { border-top: 0; }
-.ranks .vs { grid-column: 2 / -1; }
-.vs { min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 2px 0 2px; font-size: .8125rem; line-height: 1.4; color: var(--ink-2); }
-.vsbox { display: block; min-width: 0; border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px 6px; }
-.vsbox b { display: block; margin-bottom: 3px; font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--win); }   /* "Beat" in green */
-.vsbox.lostto b { color: var(--loss); }               /* "Lost to" in red */
-.vs .opps { display: flex; flex-wrap: wrap; gap: 2px 10px; }
-.vs .opp { white-space: nowrap; display: inline-flex; align-items: center; }
-.vs .x { margin-left: 3px; font-size: .85rem; font-weight: 700; }
-.vs .n { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }   /* rank numbers: bold, no colour */
-.vs .nil { opacity: .8; }
-.ranks .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ranks .nm { font-weight: 600; color: var(--ink); text-decoration: none; }
-.ranks a.nm:hover { color: var(--teal); text-decoration: underline; }
-.ranks .rec { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
-.ranks .mv { color: var(--ink-2); font-size: .8125rem; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-.ranks .mv.up { color: var(--teal); }
 
 /* ---- games ---- */
 .bar { display: flex; align-items: end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: 12px; }
@@ -302,15 +278,12 @@ h2 { font: 700 1.375rem/1.2 "Barlow Condensed", sans-serif; margin: 0; }
 /* ---- team names link to the team's page ---- */
 a.tlink { color: inherit; text-decoration: none; }
 a.tlink:hover { color: var(--teal); text-decoration: underline; }
-a.opp { color: inherit; text-decoration: none; }
-a.opp:hover .n { color: var(--teal); }
 
 /* ---- a team's page ---- */
 .thead { display: flex; align-items: center; gap: 16px; margin: 32px 0 16px; }
 .thead h1 { margin: 0; }
 .logo.big { width: 76px; height: 76px; flex: none; }
 .tsub { margin: 4px 0 0; color: var(--ink-2); }
-.tvs { max-width: 34rem; }
 .tsec { margin-top: 36px; }
 .tsec h2 { margin-bottom: 8px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 8px; max-width: 56rem; }
@@ -333,17 +306,6 @@ a.opp:hover .n { color: var(--teal); }
   .stable .stm .rk { display: none; }      /* the ranks are on the score line just above; the logos stay */
 }
 
-/* ---- rankings on a wide screen: one line per team, Beat and Lost to beside it ---- */
-@media (min-width: 900px) {
-  .ranks, .ranks-head { max-width: none; }
-  .ranks li, .ranks-head { grid-template-columns: 2.25rem minmax(10rem, 14rem) 3.5rem 3rem 1fr 1fr; column-gap: 14px; }
-  .ranks .vs { display: contents; }
-  .ranks .vsbox { align-self: stretch; display: flex; align-items: center; padding: 4px 10px; min-height: 34px; }
-  .ranks .vsbox b { display: none; }                  /* the column headings say Beat and Lost to */
-  .ranks-head span.wide { display: block; text-align: left; text-transform: uppercase; letter-spacing: .05em; font-size: .6875rem; padding-left: 11px; }
-  .ranks-head .wide.beat { color: var(--win); }
-  .ranks-head .wide.lostto { color: var(--loss); }
-}
 
 /* photos in the team pages' player lists */
 .ptable .nm .face { width: 40px; height: 40px; font-size: .8125rem; }
@@ -444,7 +406,6 @@ a.opp:hover .n { color: var(--teal); }
 .starwho { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); text-decoration: none; }
 .starwho:hover span:last-child { color: var(--teal); text-decoration: underline; }
 .stars .face { width: 40px; height: 40px; font-size: .8125rem; }
-.vsnote { margin-top: 8px; }
 .pltable tr.part td, .pltable tr.part .nm a { color: var(--ink-2); }
 .when .d { display: block; color: var(--ink); font-weight: 600; }
 @media (max-width: 640px) { .when .d { display: inline; margin-right: 8px; } }
