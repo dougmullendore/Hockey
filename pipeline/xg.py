@@ -202,3 +202,17 @@ def summarize(doc: dict) -> dict:
     for row in out["g"].values():
         row[0] = round(row[0], 3)
     return out
+
+
+def attempts(doc: dict) -> list[tuple]:
+    """Every shot attempt of a game as (period, second of the period, by the
+    home team?, expected goals, goal?), for counting what happened while a
+    line was on the ice. A blocked shot is an attempt worth no expected
+    goals. Shootouts and penalty shots are left out."""
+    evs = events(doc)
+    out = [(e["period"], e["secs"], e["home"], 0.0, 0) for e in evs
+           if e["type"] == "blocked-shot" and e["ptype"] != "SO" and e["home"] is not None and e["secs"] is not None]
+    for s in shots(evs):
+        if s["secs"] is not None and not s["penalty_shot"]:
+            out.append((s["period"], s["secs"], s["home"], round(chance(s), 4), s["goal"]))
+    return sorted(out, key=lambda a: (a[0], a[1]))

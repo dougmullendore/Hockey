@@ -233,16 +233,18 @@ def update_lines(state: Path, now: dt.datetime) -> dict:
     todo = [g for g in sel["games"] if g["state"] == "final" and str(g["id"]) not in stored
             and (boxes.get(str(g["id"])) or {}).get("status") == "F"]
     by_url = {config.SHIFTS_URL.format(game=g["id"]): g for g in todo}
+    # the play-by-play too, for what happened while each line was on the ice
+    plays = {path.split("/")[1]: doc for path, doc, err in web.get_many([f"gamecenter/{g['id']}/play-by-play" for g in todo], tries=2) if err is None}
     read = empty = failed = 0
     old = (now.date() - dt.timedelta(days=config.SHIFTS_GIVE_UP_DAYS)).isoformat()
     for url, doc, err in web.get_urls(list(by_url), tries=2):
         g = by_url[url]
-        if err is not None:
+        if err is not None or str(g["id"]) not in plays:
             failed += 1
             continue
         box = boxes[str(g["id"])]
         pos = {row[0]: row[3] for side in ("away", "home") for row in box[side]["sk"]}
-        counted = lines.count(lines.parse_shifts(doc), pos)
+        counted = lines.count(lines.parse_shifts(doc), pos, xg.attempts(plays[str(g["id"])]), g["home"]["id"])
         if set(counted) == {g["away"]["id"], g["home"]["id"]}:
             stored[str(g["id"])] = {"v": lines.VERSION, **counted}
             read += 1
@@ -289,7 +291,13 @@ def team_lines(games: list[dict], boxes: dict, counted: dict, people: dict, tabl
             dressed.append({"id": r["id"], "pos": r["pos"], "toi": r["toi"], "fo": (faced.get(str(r["id"])) or [0] * 5)[4],
                             "sh": (people.get(str(r["id"])) or {}).get("sh")})
         per_game = [counted[str(g["id"])][team] for g in mine]
-        found = lines.team_lines(per_game[0], per_game[:lines.SPECIAL_GAMES], per_game, dressed)
+        # everyone who has skated for the team this season, for the season's lines
+        skated = {}
+        for g in mine:
+            for row in boxes[str(g["id"])]["home" if g["home"]["id"] == team else "away"]["sk"]:
+                skated.setdefault(row[0], row)
+        others = {pid: {"pos": row[3], "sh": (people.get(str(pid)) or {}).get("sh")} for pid, row in skated.items()}
+        found = lines.team_lines(per_game[0], per_game[:lines.SPECIAL_GAMES], per_game, dressed, others)
         # everyone in a special-teams unit, forwards before defensemen
         seen = {}
         for g in mine[:lines.SPECIAL_GAMES]:
@@ -300,6 +308,10 @@ def team_lines(games: list[dict], boxes: dict, counted: dict, people: dict, tabl
             unit["ids"] = sorted(order, key=lambda p: ((seen.get(p) or [0, 0, "", "D"])[3] == "D", order.index(p)))
         for row in list(seen.values()):
             note(row[0], row[2], row[1], row[3])
+        for group in found["all"]["f"] + found["all"]["d"]:
+            for pid in group["ids"]:
+                if str(pid) not in info and pid in skated:
+                    note(pid, skated[pid][2], skated[pid][1], skated[pid][3])
         goalies = []
         for row in sorted(box[side]["g"], key=lambda r: -r[7]):
             note(row[0], row[2], row[1], "G")

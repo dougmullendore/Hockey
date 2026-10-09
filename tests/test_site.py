@@ -387,6 +387,31 @@ def test_lines_are_read_off_a_real_shift_chart():
     assert pos[found["f"][0]["ids"][0]] == "L"                                      # Marchand, the listed left wing, on the left
 
 
+def test_what_happens_while_a_line_is_out():
+    """Two made-up teams with one line each for ten minutes, then another; a penalty in the middle."""
+    pos = {**{i: "LCRDD"[(i - 1) % 5] for i in range(1, 11)}, **{i: "LCRDD"[(i - 21) % 5] for i in range(21, 31)}}
+    shifts = [("AAA", p, 1, 0, 600) for p in range(1, 6)] + [("AAA", p, 1, 600, 1200) for p in range(6, 11)]
+    shifts += [("BBB", p, 1, 0, 600) for p in range(21, 26)] + [("BBB", p, 1, 600, 1200) for p in (26, 27, 28, 29)] + [("BBB", 30, 1, 700, 1200)]
+    shots = [(1, 100, 1, 0.2, 0), (1, 200, 1, 0.5, 1), (1, 300, 0, 0.0, 0),        # by the home team (BBB) twice, then a blocked shot by AAA
+             (1, 600, 0, 0.3, 1),                                                    # a goal on the second the lines change: the old line's
+             (1, 650, 1, 0.9, 1),                                                    # BBB has four skaters: not five-on-five, not counted
+             (1, 800, 0, 0.1, 0), (2, 100, 0, 0.4, 0)]                              # and nobody is on the ice in the second period
+    got = lines.count(shifts, pos, shots, "BBB")
+    a, b = got["AAA"], got["BBB"]
+    assert a["f"][0] == [[1, 2, 3], 600] and a["fs"] == {"1-2-3": [2, 2, 0.3, 0.7, 1, 1], "6-7-8": [1, 0, 0.1, 0.0, 0, 0]}
+    assert a["ds"] == {"4-5": [2, 2, 0.3, 0.7, 1, 1], "9-10": [1, 0, 0.1, 0.0, 0, 0]}
+    assert b["fs"] == {"21-22-23": [2, 2, 0.7, 0.3, 1, 1], "26-27-28": [0, 1, 0.0, 0.1, 0, 0]} and b["f"][1] == [[26, 27, 28], 500]
+    assert lines.count(shifts, pos)["AAA"]["fs"] == {} and lines.key_of([3, 1, 2]) == "1-2-3"
+    # over a season: two such games
+    dressed = [{"id": p, "pos": pos[p], "toi": 600, "fo": 0, "sh": "L" if p % 2 else "R"} for p in range(1, 11)]
+    found = lines.team_lines(a, [a], [a, a], dressed)
+    assert found["f"][0]["on"] == [4, 4, 0.6, 1.4, 2, 2] and found["d"][1]["on"] == [2, 0, 0.2, 0.0, 0, 0] and found["f"][0]["season"] == 1200
+    assert [r["ids"] for r in found["all"]["f"]] == [[1, 2, 3], [6, 7, 8]] and found["all"]["f"][0] == {"ids": [1, 2, 3], "season": 1200, "games": 2, "on": [4, 4, 0.6, 1.4, 2, 2]}
+    assert [r["ids"] for r in found["all"]["d"]] == [[5, 4], [9, 10]]                # the left shot on the left
+    short = lines.team_lines(a, [a], [a], dressed)["all"]                            # one game: only the line with 10 minutes together is listed
+    assert [r["season"] for r in short["f"]] == [600] and [r["ids"] for r in short["d"]] == [[5, 4]]
+
+
 def test_a_forward_line_is_set_out_left_to_right():
     pos = {1: "C", 2: "L", 3: "R", 4: "C", 5: "C"}
     assert lines.arrange([1, 2, 3], pos, {}) == [2, 1, 3]
@@ -571,7 +596,7 @@ def test_the_site_is_built_from_what_is_stored():
         combos = json.loads((out / "lines.json").read_text())["teams"]
         assert set(combos) == {"BOS", "UTA"} and combos["BOS"]["game"] == {"id": 2026020090, "date": "2026-10-10", "opp": "UTA", "home": 1}
         assert [g["id"] for g in combos["BOS"]["g"]] == [24] and combos["BOS"]["g"][0]["role"] == "start"
-        assert combos["BOS"]["d"] == [{"ids": [23], "toi": 0, "season": 0, "games": 0}] and combos["BOS"]["players"]["21"]["name"] == "David Pastrnak"
+        assert combos["BOS"]["d"] == [{"ids": [23], "toi": 0, "season": 0, "games": 0, "on": [0, 0, 0.0, 0.0, 0, 0]}] and combos["BOS"]["all"] == {"f": [], "d": []} and combos["BOS"]["players"]["21"]["name"] == "David Pastrnak"
         assert sorted(combos["BOS"]["f"][0]["ids"]) == [21, 22]
         by = {g["id"]: g for g in data["games"]}
         assert by[2026020056]["box"] == 1 and 0 < by[2026020056]["p0"] < 1 and by[2026020056]["home"]["rank"] == 1
