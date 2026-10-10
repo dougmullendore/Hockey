@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GOAT Hockey: NHL games</title>
+<meta name="description" content="Every NHL game, week by week, with each team's chance of winning, where to watch, live scores, standings, team stats and a card for every player.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-title" content="GOAT Hockey">
+<meta name="theme-color" content="#0e7490">
+<link rel="stylesheet" href="styles.css?v=c741abd8f3">
+</head>
+<body>
+<a class="skip" href="#games">Skip to the games</a>
+<header class="mast">
+  <div class="wrap mast-row">
+    <a class="brand" href="#/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5l9.2 13.2c.7 1 1.6 1.5 2.8 1.5h3.5"/><path d="M18 2.5L8.8 15.7c-.7 1-1.6 1.5-2.8 1.5H2.5"/><ellipse cx="12" cy="21.3" rx="2.7" ry="1.1"/></svg><span id="brand">GOAT Hockey</span></a>
+    <nav class="pages" aria-label="Pages">
+      <a href="#/" data-page="games" data-w="nav.games">Games</a>
+      <a href="#/standings" data-page="standings" data-w="nav.standings">Standings</a>
+      <a href="#/teams" data-page="teams" data-w="nav.teams">Teams</a>
+      <a href="#/players" data-page="players" data-w="nav.players">Players</a>
+      <a href="#/lines" data-page="lines" data-w="nav.lines">Lines</a>
+      <a href="#/odds" data-page="odds" data-w="nav.odds">Odds</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <section id="page-games">
+    <h1 data-w="games.title">NHL Games</h1>
+    <p class="lede" data-w="games.lede">Every NHL game, week by week.</p>
+    <p class="livenote" id="live-note" role="status" hidden></p>
+    <div id="games" tabindex="-1">
+      <div class="bar">
+        <h2 id="h-list">Loading the games…</h2>
+        <div class="nav" id="nav"></div>
+      </div>
+      <div id="list"></div>
+    </div>
+  </section>
+
+  <section id="page-standings" hidden>
+    <h1 data-w="standings.title">NHL Standings</h1>
+    <p class="lede" id="rank-lede"></p>
+    <div class="nav filters" id="rank-sort"></div>
+    <div id="stand"></div>
+    <p class="note" id="rank-note"></p>
+    <p class="note" id="goat-note"></p>
+  </section>
+
+  <section id="page-teams" hidden>
+    <h1 data-w="teams.title">NHL Team Stats</h1>
+    <p class="lede" data-w="teams.lede">How each team scores, shoots, defends and plays special teams, per game. From official box scores.</p>
+    <div id="t-list"></div>
+  </section>
+
+  <section id="page-players" hidden>
+    <h1 data-w="players.title">NHL Players</h1>
+    <p class="lede" data-w="players.lede">Every regular in the NHL, ranked by Impact per game.</p>
+    <div class="nav filters" id="p-filters"></div>
+    <div id="p-list"></div>
+  </section>
+
+  <section id="page-lines" hidden>
+    <div id="lines"></div>
+  </section>
+
+  <section id="page-odds" hidden>
+    <h1 data-w="odds.title">NHL Playoff Odds</h1>
+    <p class="lede" id="odds-lede"></p>
+    <div class="nav filters" id="odds-view"></div>
+    <div id="odds"></div>
+    <p class="note" id="odds-note"></p>
+    <p class="note" id="odds-test"></p>
+  </section>
+
+  <section id="page-team" hidden>
+    <div id="team"></div>
+  </section>
+
+  <section id="page-game" hidden>
+    <p class="back"><a href="#/" data-w="game.back">All games</a></p>
+    <div id="game"></div>
+  </section>
+
+  <section id="page-card" hidden>
+    <p class="back"><a href="#/players" data-w="players.back">All players</a></p>
+    <div id="card"></div>
+  </section>
+</main>
+<footer class="wrap foot">
+  <p id="foot-updated"></p>
+  <p data-w="footer.about">Game times are shown in your own time zone.</p>
+</footer>
+<script src="app.js?v=df2e47c5d5"></script>
+</body>
+</html>
