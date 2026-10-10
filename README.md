@@ -1,6 +1,6 @@
 # GOAT Hockey
 
-Every NHL game, week by week, with each team's chance of winning, where to
+Every NHL game, day by day, with each team's chance of winning, where to
 watch and the score as it happens; the standings and a GOAT ranking of the 32
 teams; team and player stats; and a page for every team, game and player.
 
@@ -11,11 +11,11 @@ You do not need to run anything. GitHub does it all on a schedule.
 
 ## What the site shows
 
-- **Games** (first page): every game this week, grouped by day. Games still to
+- **Games** (first page): today's, tomorrow's and yesterday's games, grouped by day, today first. Games still to
   come show the start time in the reader's own time zone, each team's chance
   of winning and where to watch; finished ones show the score (with OT or SO
-  when it went past regulation) and link to the box score. Buttons step to
-  earlier and later weeks, and a menu narrows the list to one team's whole
+  when it went past regulation) and link to the box score. Buttons step three days
+  earlier or later, and a menu narrows the list to one team's whole
   season. The number beside each team is its place in the league standings.
 - **Standings** (second page): the league's own table, by division, as the
   wild-card playoff picture, by conference or for the whole league, plus the

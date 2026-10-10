@@ -18,18 +18,19 @@ nav.odds = Odds
 
 # ---- Games page ----
 games.title = NHL Games
-games.lede = Every NHL game, week by week: each team's chance of winning, where to watch, and the score as it happens.
+games.lede = Today's, tomorrow's and yesterday's NHL games: each team's chance of winning, where to watch, and the score as it happens.
 games.all_teams = All 32 teams
-games.earlier = Earlier week
-games.this_week = This week
-games.later = Later week
+games.earlier = Earlier days
+games.today = Today
+games.three_days = Today, tomorrow and yesterday
+games.later = Later days
 games.no_broadcast = No broadcast listed
 games.box_score = Box score
 games.live_box_score = Live box score
 games.live = Live
 games.away = Away
 games.home = Home
-games.note = The visiting team is on the left, and the channel or streaming service is on the right. The number beside each team is its place in the league standings today, also for earlier weeks. Choose a team to see its whole season.
+games.note = The visiting team is on the left, and the channel or streaming service is on the right. The number beside each team is its place in the league standings today, also for earlier days. Choose a team to see its whole season.
 games.odds_note = Percentages are each team's chance of winning, from this site's own ratings of results, opponents and home ice; they are not betting lines.
 games.live_note = Live scores from ESPN, refreshed every {seconds} seconds.
 

@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var data = null, state = { week: null, team: null };
+  var data = null, state = { day: null, team: null };
 
   function el(tag, attrs, kids) {
     var n = document.createElement(tag);
@@ -20,7 +20,6 @@
   function iso(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   function day(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2], 12); }
   function addDays(s, n) { var d = day(s); d.setDate(d.getDate() + n); return iso(d); }
-  function monday(s) { var d = day(s); return addDays(s, -((d.getDay() + 6) % 7)); }
   function short(s) { return day(s).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
   function long(s) { return day(s).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }); }
   function clockTime(t) { return t.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
@@ -341,13 +340,13 @@
   }
   document.addEventListener("visibilitychange", function () { if (data && !document.hidden) pollLive(); });
 
-  function listInto(holder, games, newestFirst) {
+  function listInto(holder, games, newestFirst, asGiven) {
     var days = {}, order = [];
     games.forEach(function (g) { if (!days[g.date]) { days[g.date] = []; order.push(g.date); } days[g.date].push(g); });
     if (newestFirst) order.reverse();
-    else if (order.indexOf(today) > 0) { order.splice(order.indexOf(today), 1); order.unshift(today); }   // today's games first
+    else if (!asGiven && order.indexOf(today) > 0) { order.splice(order.indexOf(today), 1); order.unshift(today); }   // today's games first
     order.forEach(function (d) {
-      holder.appendChild(el("h3", { "class": "day" + (d === today ? " today" : ""), text: (d === today ? "Today, " : "") + long(d) }));
+      holder.appendChild(el("h3", { "class": "day" + (d === today ? " today" : ""), text: (d === today ? "Today, " : d === addDays(today, 1) ? "Tomorrow, " : d === addDays(today, -1) ? "Yesterday, " : "") + long(d) }));
       holder.appendChild(el("ol", { "class": "games" }, days[d].map(function (g) { return row(g); })));
     });
   }
@@ -361,9 +360,6 @@
     // which side is which: over the columns on a wide screen, beside the two lines on a phone
     holder.appendChild(el("div", { "class": "hahead", "aria-hidden": "true" }, [el("span"), el("span", { "class": "ha away", text: W("games.away") }),
       el("span"), el("span", { "class": "ha home", text: W("games.home") }), el("span")]));
-    var weeks = {};
-    data.games.forEach(function (g) { weeks[monday(g.date)] = 1; });
-    var first = Object.keys(weeks).sort()[0], last = Object.keys(weeks).sort().pop();
     var pick = el("select", { id: "f-team", "aria-label": "Show one team", onchange: function () { state.team = pick.value || null; draw(); } },
       [el("option", { value: "", text: W("games.all_teams") })].concat(teamsHere.map(function (x) {
         return el("option", { value: x.id, text: x.name, selected: x.id === state.team });
@@ -383,22 +379,25 @@
       return;
     }
 
-    if (!state.week) {       // open on this week, or the nearest week that has games
-      var nowWeek = monday(today);
-      state.week = !first ? nowWeek : nowWeek < first ? first : nowWeek > last ? last : nowWeek;
-    }
-    var w = state.week, end = addDays(w, 6), thisWeek = monday(today);
+    // Three days at a time. Opened on today, they are today, tomorrow and yesterday.
+    var dates = data.games.map(function (g) { return g.date; }).sort(), first = dates[0], last = dates[dates.length - 1];
+    if (!state.day) state.day = !first ? today : today < first ? first : today > last ? last : today;
+    var mid = state.day, w = addDays(mid, -1), end = addDays(mid, 1);
     var games = data.games.filter(function (g) { return g.date >= w && g.date <= end; });
-    head.textContent = (w === thisWeek ? "This week, " : "Week of ") + short(w) + " to " + short(end);
-    nav.appendChild(el("button", { type: "button", text: W("games.earlier"), disabled: !first || w <= first, onclick: function () { state.week = addDays(w, -7); draw(); } }));
-    if (w !== thisWeek && first && thisWeek >= first && thisWeek <= last) nav.appendChild(el("button", { type: "button", text: W("games.this_week"), onclick: function () { state.week = thisWeek; draw(); } }));
-    nav.appendChild(el("button", { type: "button", text: W("games.later"), disabled: !last || w >= last, onclick: function () { state.week = addDays(w, 7); draw(); } }));
+    if (mid === today) {          // today first, then tomorrow, then yesterday
+      var place = {}; place[today] = 0; place[end] = 1; place[w] = 2;
+      games = games.map(function (g, i) { return [place[g.date], i, g]; }).sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; }).map(function (x) { return x[2]; });
+    }
+    head.textContent = mid === today ? W("games.three_days") : short(w) + " to " + short(end);
+    nav.appendChild(el("button", { type: "button", text: W("games.earlier"), disabled: !first || w <= first, onclick: function () { state.day = addDays(mid, -3); draw(); } }));
+    if (mid !== today && first && today >= first && today <= last) nav.appendChild(el("button", { type: "button", text: W("games.today"), onclick: function () { state.day = today; draw(); } }));
+    nav.appendChild(el("button", { type: "button", text: W("games.later"), disabled: !last || end >= last, onclick: function () { state.day = addDays(mid, 3); draw(); } }));
     if (!games.length) {
-      holder.appendChild(el("p", { "class": "empty", text: "No games this week. Try an earlier or later week." }));
+      holder.appendChild(el("p", { "class": "empty", text: "No games in these three days. Try earlier or later days." }));
       return;
     }
-    listInto(holder, games);
-    holder.appendChild(el("p", { "class": "note", text: games.length + " games this week. " + W("games.note") }));
+    listInto(holder, games, false, true);
+    holder.appendChild(el("p", { "class": "note", text: games.length + (games.length === 1 ? " game" : " games") + " in these three days. " + W("games.note") }));
     if (games.some(function (g) { return g.p != null && g.state !== "final"; })) holder.appendChild(el("p", { "class": "note", text: oddsNote().trim() }));
   }
 
